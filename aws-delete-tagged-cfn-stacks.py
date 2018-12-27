@@ -61,3 +61,6 @@ result = get_stacknames_and_deletionorder(logger, client)
 for stack in sorted(result, key=lambda k: k['stack_deletion_order']):
     print(stack)
     delete_stack(logger, client, stack)
+    logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
+
+logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
