@@ -26,7 +26,7 @@ def get_stacknames_and_deletionorder(logger, client):
         stack_list = response['Stacks']
     except botocore.exceptions.NoRegionError as e:
         logger.error("No region provided!!!")
-        raise
+        raise e
 
     for stack in stack_list:
         if 'Tags' in stack:
@@ -41,14 +41,22 @@ def get_stacknames_and_deletionorder(logger, client):
 
 def delete_stack(logger, client, stack):
 
+    boto3.set_stream_logger('boto3', level=boto3.logging.DEBUG)
+    boto3.set_stream_logger('botocore', level=boto3.logging.DEBUG)
+    boto3.set_stream_logger('boto3.resources', level=boto3.logging.DEBUG)
+
     waiter = client.get_waiter('stack_delete_complete')
 
     try:
         logger.info("Start deletion of stack %s (deletion order is %i)" % (stack['stack_name'], stack['stack_deletion_order']))
         client.delete_stack(StackName=stack['stack_name'])
         waiter.wait(StackName=stack['stack_name'])
-    except:
-        raise
+    except Exception as e:
+        raise e
+
+    boto3.set_stream_logger('boto3', level=boto3.logging.INFO)
+    boto3.set_stream_logger('botocore', level=boto3.logging.INFO)
+    boto3.set_stream_logger('boto3.resources', level=boto3.logging.INFO)
 
     return True
 
@@ -62,12 +70,12 @@ def get_access_log_bucket(logger, lbclient, lb):
         if len(bucket) > 0:
             return(bucket[0]['Value'])
         else:
-            return('')
-    except:
+            return ''
+    except Exception:
         raise
 
 
-def empty_access_logs_bucket(logger, bucket):
+def empty_bucket(logger, bucket):
     try:
         logger.info("Connect to bucket %s" % bucket)
         s3 = boto3.resource('s3')
@@ -75,13 +83,14 @@ def empty_access_logs_bucket(logger, bucket):
         logger.info("Start deletion of all objects in bucket %s" % bucket)
         bucket.objects.all().delete()
         logger.info("Finished deletion of all objects in bucket %s" % bucket)
-    except:
+    except Exception:
         logger.error("Error occured while deleting all objects in %s" % bucket)
         raise
 
 
 def disable_access_logs(logger, lbclient, lb):
     try:
+        logger.info("Disable access logs for load balancer %s" % lb)
         result = lbclient.modify_load_balancer_attributes(
                    LoadBalancerArn=lb,
                    Attributes=[
@@ -91,13 +100,14 @@ def disable_access_logs(logger, lbclient, lb):
                        },
                    ]
                  )
-    except:
+        logger.info("Access logs for load balancer %s successfully disabled" % lb)
+    except Exception:
         raise
+
 
 def do_pre_deletion_tasks(logger):
     lbclient = boto3.client('elbv2', region_name='eu-central-1')
     lb_list = []
-
 
     try:
         logger.info("Start getting LB ARNs")
@@ -115,23 +125,24 @@ def do_pre_deletion_tasks(logger):
         bucket = get_access_log_bucket(logger, lbclient, lb['LoadBalancerArn'])
         disable_access_logs(logger, lbclient, lb['LoadBalancerArn'])
         if bucket != '':
-            empty_access_logs_bucket(logger, bucket):
+            empty_bucket(logger, bucket)
 
     return True
 
 
-logger = init_logger()
-client = boto3.client('cloudformation', region_name='eu-central-1')
+try:
+    logger = init_logger()
+    client = boto3.client('cloudformation', region_name='eu-central-1')
 
-result = get_stacknames_and_deletionorder(logger, client)
+    result = get_stacknames_and_deletionorder(logger, client)
 
-do_pre_deletion_tasks(logger)
+    do_pre_deletion_tasks(logger)
 
-sys.exit(0)
+    for stack in sorted(result, key=lambda k: k['stack_deletion_order']):
+        print(stack)
+        delete_stack(logger, client, stack)
+        logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
 
-# for stack in sorted(result, key=lambda k: k['stack_deletion_order']):
-#     print(stack)
-#     delete_stack(logger, client, stack)
-#     logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
-#
-# logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
+    logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
+except Exception:
+    raise
