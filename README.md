@@ -35,9 +35,14 @@
 ```
 
 
-When running the Python script with the appropriate credentials, it will delete
-all _CloudFormation_ stacks tagged with a `stack_deletion_order` tag, in increasing
-order of the value of the tag.
+When running the Python script with the appropriate credentials, it will delete:
+* all _CloudFormation_ stacks tagged with a `stack_deletion_order` tag, in increasing
+  order of the value of the tag.
+* stop all RDS DB Instances and Clusters tagged with `stop_or_start_with_cfn_stacks` and
+  value `yes`
+  
+*IMPORTANT*: For RDS Clusters ( _Aurora_ ), the tag needs to be on the cluster, not on the
+instance in the cluster.
 
 This can be used in combination with a _Scheduled Task_ to tear down _CloudFormation_
 stacks that are not used, for example to save on costs by stopping resources outside

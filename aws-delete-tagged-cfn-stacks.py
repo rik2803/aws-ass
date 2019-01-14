@@ -41,9 +41,9 @@ def get_stacknames_and_deletionorder(logger, client):
 
 def delete_stack(logger, client, stack):
 
-    boto3.set_stream_logger('boto3', level=boto3.logging.DEBUG)
-    boto3.set_stream_logger('botocore', level=boto3.logging.DEBUG)
-    boto3.set_stream_logger('boto3.resources', level=boto3.logging.DEBUG)
+    # boto3.set_stream_logger('boto3', level=boto3.logging.DEBUG)
+    # boto3.set_stream_logger('botocore', level=boto3.logging.DEBUG)
+    # boto3.set_stream_logger('boto3.resources', level=boto3.logging.DEBUG)
 
     waiter = client.get_waiter('stack_delete_complete')
 
@@ -54,9 +54,9 @@ def delete_stack(logger, client, stack):
     except Exception as e:
         raise e
 
-    boto3.set_stream_logger('boto3', level=boto3.logging.INFO)
-    boto3.set_stream_logger('botocore', level=boto3.logging.INFO)
-    boto3.set_stream_logger('boto3.resources', level=boto3.logging.INFO)
+    # boto3.set_stream_logger('boto3', level=boto3.logging.INFO)
+    # boto3.set_stream_logger('botocore', level=boto3.logging.INFO)
+    # boto3.set_stream_logger('boto3.resources', level=boto3.logging.INFO)
 
     return True
 
@@ -129,6 +129,73 @@ def do_pre_deletion_tasks(logger):
 
     return True
 
+def stop_tagged_rds_clusters_and_instances(logger):
+    logger.info("Stopping RDS clusters and instances tagged with stop_or_start_with_cfn_stacks=true")
+
+    rds_client = boto3.client('rds', region_name='eu-central-1')
+
+    logger.info("Get list of all RDS instances")
+    try:
+        response = rds_client.describe_db_instances()
+        for instance in response['DBInstances']:
+            try:
+                logger.debug("DBClusterIdentifier: %s", instance['DBClusterIdentifier'])
+            except Exception:
+                logger.debug("No DBClusterIdentifier property")
+
+            if resource_has_tag(logger, rds_client, instance['DBInstanceArn'], 'stop_or_start_with_cfn_stacks', 'yes'):
+                logger.info("RDS instance %s is tagged with %s and tag value is yes" % (instance['DBInstanceArn'], 'stop_or_start_with_cfn_stacks'))
+                logger.info("Stopping RDS instance %s" % instance['DBInstanceArn'])
+                if instance['DBInstanceStatus'] != 'available':
+                    logger.info("RDS instance %s is in state %s ( != available ): Skipping stop" % (instance['DBInstanceIdentifier'], instance['DBInstanceStatus']))
+                elif 'DBClusterIdentifier' in instance:
+                    logger.info("RDS instance %s is part of RDS Cluster %s: Skipping stop" % (instance['DBInstanceIdentifier'], instance['DBClusterIdentifier']))
+                else:
+                    rds_client.stop_db_instance(DBInstanceIdentifier=instance['DBInstanceIdentifier'])
+                    logger.info("Stopping RDS instance %s successfully triggered" % instance['DBInstanceArn'])
+            else:
+                logger.info("RDS instance %s is not tagged with %s or tag value is not yes" % (instance['DBInstanceArn'], 'stop_or_start_with_cfn_stacks'))
+    except botocore.exceptions.NoRegionError as e:
+        logger.error("No region provided!!!")
+        raise
+    except botocore.exceptions.NoCredentialsError as e:
+        logger.error("No credentials provided!!!")
+        raise
+
+    logger.info("Get list of all RDS clusters")
+    try:
+        response = rds_client.describe_db_clusters()
+        for instance in response['DBClusters']:
+            if resource_has_tag(logger, rds_client, instance['DBClusterArn'], 'stop_or_start_with_cfn_stacks', 'yes'):
+                logger.info("RDS cluster %s is tagged with %s and tag value is not yes" % (instance['DBClusterArn'], 'stop_or_start_with_cfn_stacks'))
+                logger.info("Stopping RDS cluster %s" % instance['DBClusterArn'])
+                if instance['Status'] != 'available':
+                    logger.info("RDS cluster %s is in state %s ( != available ): Skipping stop" % (instance['DBClusterIdentifier'], instance['Status']))
+                else:
+                    rds_client.stop_db_cluster(DBClusterIdentifier=instance['DBClusterIdentifier'])
+                    logger.info("Stopping RDS lcuster %s successfully triggered" % instance['DBClusterArn'])
+            else:
+                logger.info("RDS cluster %s is not tagged with %s or tag value is not yes" % (instance['DBClusterArn'], 'stop_or_start_with_cfn_stacks'))
+    except botocore.exceptions.NoRegionError as e:
+        logger.error("No region provided!!!")
+        raise
+    except botocore.exceptions.NoCredentialsError as e:
+        logger.error("No credentials provided!!!")
+        raise
+
+
+
+def resource_has_tag(logger, client, resource_arn, tag_name, tag_value):
+    try:
+        response = client.list_tags_for_resource(ResourceName=resource_arn)
+        for tag in response['TagList']:
+            if tag['Key'] == tag_name and tag['Value'] == tag_value:
+                return True
+    except Exception:
+        return False
+
+    return False
+
 
 try:
     logger = init_logger()
@@ -142,6 +209,8 @@ try:
         print(stack)
         delete_stack(logger, client, stack)
         logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
+
+    stop_tagged_rds_clusters_and_instances(logger)
 
     logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
 except Exception:
