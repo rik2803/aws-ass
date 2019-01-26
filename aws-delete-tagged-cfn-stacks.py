@@ -161,7 +161,7 @@ def disable_access_logs(logger, lbclient, lb):
 
 
 def do_pre_deletion_tasks(logger):
-    lbclient = boto3.client('elbv2', region_name='eu-central-1')
+    lbclient = boto3.client('elbv2', region_name=get_region())
     lb_list = []
 
     try:
@@ -187,7 +187,7 @@ def do_pre_deletion_tasks(logger):
 def stop_tagged_rds_clusters_and_instances(logger):
     logger.info("Stopping RDS clusters and instances tagged with stop_or_start_with_cfn_stacks=yes")
 
-    rds_client = boto3.client('rds', region_name='eu-central-1')
+    rds_client = boto3.client('rds', region_name=get_region())
 
     logger.info("Get list of all RDS instances")
     try:
@@ -254,7 +254,7 @@ def resource_has_tag(logger, client, resource_arn, tag_name, tag_value):
 
 def delete_tagged_cloudformation_stacks(logger):
     logger.info("Start deletion of CloudFormation stacks tagged with stack_deletion_order")
-    client = boto3.client('cloudformation', region_name='eu-central-1')
+    client = boto3.client('cloudformation', region_name=get_region())
 
     result = get_stacknames_and_deletionorder(logger, client)
 
@@ -288,7 +288,7 @@ def save_beanstalk_environment_deletion_order_to_state_bucket(logger, client, en
 
 def delete_tagged_beanstalk_environments(logger, state_bucket_name):
     logger.info("Start deletion of BeanStalk environments tagged with environment_deletion_order")
-    client = boto3.client('elasticbeanstalk', region_name='eu-central-1')
+    client = boto3.client('elasticbeanstalk', region_name=get_region())
 
     result = get_beanstalk_envnames_and_deletionorder(logger, client)
 
