@@ -2,21 +2,33 @@ import boto3
 import botocore
 import logging
 import sys
-
+import os
+import json
 
 def init_logger():
     logger = logging.getLogger('aws-delete-tagged-cfn-stacks')
-    logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 1:
+        logger.setLevel(logging.DEBUG)
+        ch.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+        ch.setLevel(logging.INFO)
+
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     return logger
 
+def is_nested_stack(logger, stack):
+    if 'ParentId' in stack:
+        return True
+    else:
+        return False
+
 def get_stacknames_and_deletionorder(logger, client):
 
-    stack_list = []
     result = []
 
     try:
@@ -32,10 +44,35 @@ def get_stacknames_and_deletionorder(logger, client):
         if 'Tags' in stack:
             for tag in stack['Tags']:
                 if tag['Key'] == 'stack_deletion_order' and int(tag['Value']) > 0:
-                    result.append({ "stack_name": stack['StackName'],
-                                    "stack_id": stack['StackId'],
-                                    "stack_deletion_order": int(tag['Value'])
-                                   })
+                    if not is_nested_stack(logger, stack):
+                        result.append({ "stack_name": stack['StackName'],
+                                        "stack_id": stack['StackId'],
+                                        "stack_deletion_order": int(tag['Value'])
+                                       })
+    return result
+
+
+def get_beanstalk_envnames_and_deletionorder(logger, client):
+
+    result = []
+
+    try:
+        logger.info('Getting all BeanStalk environments ...')
+        response = client.describe_environments()
+        logger.info('Successfully finished getting all BeanStalk environments')
+        env_list = response['Environments']
+    except botocore.exceptions.NoRegionError as e:
+        logger.error("No region provided!!!")
+        raise e
+
+    for environment in env_list:
+        for tag in client.list_tags_for_resource(ResourceArn=environment['EnvironmentArn'])['ResourceTags']:
+            if tag['Key'] == 'environment_deletion_order' and int(tag['Value']) > 0:
+                result.append({ "environment_name": environment['EnvironmentName'],
+                                "environment_id": environment['EnvironmentId'],
+                                "environment_arn": environment['EnvironmentArn'],
+                                "environment_deletion_order": int(tag['Value'])
+                               })
     return result
 
 
@@ -51,12 +88,30 @@ def delete_stack(logger, client, stack):
         logger.info("Start deletion of stack %s (deletion order is %i)" % (stack['stack_name'], stack['stack_deletion_order']))
         client.delete_stack(StackName=stack['stack_name'])
         waiter.wait(StackName=stack['stack_name'])
+    except botocore.exceptions.WaiterError as e:
+        logger.error("Stack deletion for %s has failed, check the CloudFormation logs." % stack['stack_name'])
+        logger.error(e)
+        raise
     except Exception as e:
         raise e
 
     # boto3.set_stream_logger('boto3', level=boto3.logging.INFO)
     # boto3.set_stream_logger('botocore', level=boto3.logging.INFO)
     # boto3.set_stream_logger('boto3.resources', level=boto3.logging.INFO)
+
+    return True
+
+
+def terminate_beanstalk_environment(logger, client, environment):
+    try:
+        logger.info("Start deletion of environment %s (deletion order is %i)" % (environment['environment_name'], environment['environment_deletion_order']))
+        client.terminate_environment(EnvironmentName=environment['environment_name'])
+    except botocore.exceptions.WaiterError as e:
+        logger.error("Environment deletion for %s has failed, check the logs." % environment['environment_name'])
+        logger.error(e)
+        raise
+    except Exception as e:
+        raise e
 
     return True
 
@@ -130,7 +185,7 @@ def do_pre_deletion_tasks(logger):
     return True
 
 def stop_tagged_rds_clusters_and_instances(logger):
-    logger.info("Stopping RDS clusters and instances tagged with stop_or_start_with_cfn_stacks=true")
+    logger.info("Stopping RDS clusters and instances tagged with stop_or_start_with_cfn_stacks=yes")
 
     rds_client = boto3.client('rds', region_name='eu-central-1')
 
@@ -197,8 +252,8 @@ def resource_has_tag(logger, client, resource_arn, tag_name, tag_value):
     return False
 
 
-try:
-    logger = init_logger()
+def delete_tagged_cloudformation_stacks(logger):
+    logger.info("Start deletion of CloudFormation stacks tagged with stack_deletion_order")
     client = boto3.client('cloudformation', region_name='eu-central-1')
 
     result = get_stacknames_and_deletionorder(logger, client)
@@ -206,12 +261,84 @@ try:
     do_pre_deletion_tasks(logger)
 
     for stack in sorted(result, key=lambda k: k['stack_deletion_order']):
-        print(stack)
         delete_stack(logger, client, stack)
         logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
 
+    logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
+
+
+def save_beanstalk_environment_deletion_order_to_state_bucket(logger, client, environment, state_bucket_name):
+    logger.info("Looking for environment_deletion_order tag and saving in to bucket %s" % state_bucket_name)
+    for tag in client.list_tags_for_resource(ResourceArn=environment['environment_arn'])['ResourceTags']:
+        if tag['Key'] == 'environment_deletion_order':
+            try:
+                logger.info("Tag environment_deletion_order=%s found" % tag['Value'])
+                boto3.resource('s3').\
+                      Bucket(state_bucket_name).\
+                      put_object(Key=environment['environment_name'],
+                                 Body=json.dumps(environment))
+                logger.info("Tag environment_deletion_order successfully written to s3://%s/%s"
+                            % (state_bucket_name,
+                               environment['environment_name']))
+            except:
+                raise
+
+            break
+
+
+def delete_tagged_beanstalk_environments(logger, state_bucket_name):
+    logger.info("Start deletion of BeanStalk environments tagged with environment_deletion_order")
+    client = boto3.client('elasticbeanstalk', region_name='eu-central-1')
+
+    result = get_beanstalk_envnames_and_deletionorder(logger, client)
+
+    for environment in sorted(result, key=lambda k: k['environment_deletion_order']):
+        save_beanstalk_environment_deletion_order_to_state_bucket(logger, client, environment, state_bucket_name)
+        terminate_beanstalk_environment(logger, client, environment)
+        logger.info("Deletion of tagged BeanStalk environment %s ended successfully" % environment['environment_name'])
+
+    logger.info('Deletion of all tagged BeanStalk environments ended successfully')
+
+
+def get_region():
+    return(boto3.session.Session().region_name)
+
+
+def get_account_id():
+    return(boto3.client("sts").get_caller_identity()["Account"])
+
+
+def create_state_bucket(logger, state_bucket_name):
+    try:
+        logger.info("Create bucket %s if it does not already exist." % state_bucket_name)
+        s3 = boto3.resource('s3')
+        if s3.Bucket(state_bucket_name) in s3.buckets.all():
+            logger.info("Bucket %s already exists" % state_bucket_name)
+        else:
+            logger.info("Start creation of bucket %s" % state_bucket_name)
+            s3.create_bucket(Bucket=state_bucket_name,
+                             CreateBucketConfiguration={'LocationConstraint': get_region()})
+            logger.info("Finished creation of bucket %s" % state_bucket_name)
+    except Exception:
+        raise
+
+
+try:
+    logger = init_logger()
+    region = get_region()
+    account_id = get_account_id()
+    state_bucket_name = "%s-%s-stop-start-state-bucket" % (region, account_id)
+
+    logger.info("AccountId:    %s" % region)
+    logger.info("Region:       %s" % account_id)
+    logger.info("State Bucket: %s" % state_bucket_name)
+
+    boto_state_bucket = create_state_bucket(logger, state_bucket_name)
+
+
+    delete_tagged_cloudformation_stacks(logger)
+    delete_tagged_beanstalk_environments(logger, state_bucket_name)
     stop_tagged_rds_clusters_and_instances(logger)
 
-    logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
 except Exception:
     raise
