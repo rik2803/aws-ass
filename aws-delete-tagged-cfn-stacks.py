@@ -86,10 +86,6 @@ def get_beanstalk_envnames_and_deletionorder(logger, client):
 
 def delete_stack(logger, client, stack):
 
-    # boto3.set_stream_logger('boto3', level=boto3.logging.DEBUG)
-    # boto3.set_stream_logger('botocore', level=boto3.logging.DEBUG)
-    # boto3.set_stream_logger('boto3.resources', level=boto3.logging.DEBUG)
-
     waiter = client.get_waiter('stack_delete_complete')
 
     try:
@@ -102,10 +98,6 @@ def delete_stack(logger, client, stack):
         raise
     except Exception as e:
         raise e
-
-    # boto3.set_stream_logger('boto3', level=boto3.logging.INFO)
-    # boto3.set_stream_logger('botocore', level=boto3.logging.INFO)
-    # boto3.set_stream_logger('boto3.resources', level=boto3.logging.INFO)
 
     return True
 
@@ -348,23 +340,24 @@ def create_state_bucket(logger, state_bucket_name):
     except Exception:
         raise
 
+def main():
+    try:
+        logger = init_logger()
+        region = get_region()
+        account_id = get_account_id()
+        state_bucket_name = "%s-%s-stop-start-state-bucket" % (region, account_id)
 
-try:
-    logger = init_logger()
-    region = get_region()
-    account_id = get_account_id()
-    state_bucket_name = "%s-%s-stop-start-state-bucket" % (region, account_id)
+        logger.info("AccountId:    %s" % region)
+        logger.info("Region:       %s" % account_id)
+        logger.info("State Bucket: %s" % state_bucket_name)
 
-    logger.info("AccountId:    %s" % region)
-    logger.info("Region:       %s" % account_id)
-    logger.info("State Bucket: %s" % state_bucket_name)
+        boto_state_bucket = create_state_bucket(logger, state_bucket_name)
 
-    boto_state_bucket = create_state_bucket(logger, state_bucket_name)
+        delete_tagged_cloudformation_stacks(logger, state_bucket_name)
+        delete_tagged_beanstalk_environments(logger, state_bucket_name)
+        stop_tagged_rds_clusters_and_instances(logger)
 
+    except Exception:
+        raise
 
-    delete_tagged_cloudformation_stacks(logger, state_bucket_name)
-    delete_tagged_beanstalk_environments(logger, state_bucket_name)
-    stop_tagged_rds_clusters_and_instances(logger)
-
-except Exception:
-    raise
+main()
