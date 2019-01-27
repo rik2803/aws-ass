@@ -27,7 +27,7 @@ def is_nested_stack(logger, stack):
     else:
         return False
 
-def get_stacknames_and_deletionorder(logger, client):
+def get_stacknames_and_deletionorder(logger, client, state_bucket_name):
 
     result = []
 
@@ -45,10 +45,18 @@ def get_stacknames_and_deletionorder(logger, client):
             for tag in stack['Tags']:
                 if tag['Key'] == 'stack_deletion_order' and int(tag['Value']) > 0:
                     if not is_nested_stack(logger, stack):
-                        result.append({ "stack_name": stack['StackName'],
-                                        "stack_id": stack['StackId'],
-                                        "stack_deletion_order": int(tag['Value'])
-                                       })
+                        if 'Parameters' in stack:
+                            parameters = stack['Parameters']
+                        else:
+                            parameters = []
+
+                        this_stack = { "stack_name": stack['StackName'],
+                                       "stack_id": stack['StackId'],
+                                       "stack_deletion_order": int(tag['Value']),
+                                       "stack_parameters": parameters
+                                     }
+                        save_stack_parameters_to_state_bucket(logger, this_stack, state_bucket_name)
+                        result.append(this_stack)
     return result
 
 
@@ -252,11 +260,11 @@ def resource_has_tag(logger, client, resource_arn, tag_name, tag_value):
     return False
 
 
-def delete_tagged_cloudformation_stacks(logger):
+def delete_tagged_cloudformation_stacks(logger, state_bucket_name):
     logger.info("Start deletion of CloudFormation stacks tagged with stack_deletion_order")
     client = boto3.client('cloudformation', region_name=get_region())
 
-    result = get_stacknames_and_deletionorder(logger, client)
+    result = get_stacknames_and_deletionorder(logger, client, state_bucket_name)
 
     do_pre_deletion_tasks(logger)
 
@@ -265,6 +273,23 @@ def delete_tagged_cloudformation_stacks(logger):
         logger.info("Deletion of tagged CloudFormation stack %s ended successfully" % stack['stack_name'])
 
     logger.info('Deletion of all tagged CloudFormation stacks ended successfully')
+
+
+def save_stack_parameters_to_state_bucket(logger, stack, state_bucket_name):
+    logger.info("Saving stack information for %s to bucket %s" % (stack['stack_name'], state_bucket_name))
+
+    try:
+        logger.info("Writing stack parameters to bucket")
+        boto3.resource('s3'). \
+            Bucket(state_bucket_name). \
+            put_object(Key=stack['stack_name'],
+                       Body=json.dumps(stack))
+        logger.info("Stack parameters successfully written to s3://%s/%s"
+                    % (state_bucket_name,
+                       stack['stack_name']))
+    except:
+        logger.error("Error saving beanstalk environment_deletion_order to bucket")
+        raise
 
 
 def save_beanstalk_environment_deletion_order_to_state_bucket(logger, client, environment, state_bucket_name):
@@ -281,6 +306,7 @@ def save_beanstalk_environment_deletion_order_to_state_bucket(logger, client, en
                             % (state_bucket_name,
                                environment['environment_name']))
             except:
+                logger.error("Error saving beanstalk environment_deletion_order to bucket")
                 raise
 
             break
@@ -336,7 +362,7 @@ try:
     boto_state_bucket = create_state_bucket(logger, state_bucket_name)
 
 
-    delete_tagged_cloudformation_stacks(logger)
+    delete_tagged_cloudformation_stacks(logger, state_bucket_name)
     delete_tagged_beanstalk_environments(logger, state_bucket_name)
     stop_tagged_rds_clusters_and_instances(logger)
 
