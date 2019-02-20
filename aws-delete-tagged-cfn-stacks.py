@@ -198,14 +198,14 @@ def stop_tagged_rds_clusters_and_instances(logger):
     def stop_rds(logger, rds_type, main_key, identifier_key, arn_key, status_key):
         rds_client = boto3.client('rds', region_name=get_region())
 
-        logger.info("Get list of all RDS {}s".format(type))
+        logger.info("Get list of all RDS {}s".format(rds_type))
         try:
-            if type == 'instance':
+            if rds_type == 'instance':
                 response = rds_client.describe_db_instances()
-            elif type == 'cluster':
+            elif rds_type == 'cluster':
                 response = rds_client.describe_db_clusters()
             else:
-                raise Exception('type should be on of instance or cluster')
+                raise Exception('rds_type should be on of instance or cluster')
 
             for item in response[main_key]:
                 identifier = item[identifier_key]
@@ -214,28 +214,28 @@ def stop_tagged_rds_clusters_and_instances(logger):
 
                 if resource_has_tag(rds_client, arn, 'stop_or_start_with_cfn_stacks', 'yes'):
                     logger.info("RDS %s %s is tagged with %s and tag value is yes" %
-                                (type, arn, 'stop_or_start_with_cfn_stacks'))
-                    logger.info("Stopping RDS %s %s" % (type, arn))
+                                (rds_type, arn, 'stop_or_start_with_cfn_stacks'))
+                    logger.info("Stopping RDS %s %s" % (rds_type, arn))
                     if status != 'available':
                         logger.info("RDS %s %s is in state %s ( != available ): Skipping stop" %
-                                    (type, identifier, status))
+                                    (rds_type, identifier, status))
                     elif rds_type == 'instance' and 'DBClusterIdentifier' in item:
                         # Skip instances that are part of a RDS Cluster, they will be processed
                         # in the DBCluster part, when rds_type is 'cluster'
                         logger.info("RDS %s %s is part of RDS Cluster %s: Skipping stop" %
-                                    (type, item['DBInstanceIdentifier'], item['DBClusterIdentifier']))
+                                    (rds_type, item['DBInstanceIdentifier'], item['DBClusterIdentifier']))
                     else:
-                        if type == 'instance':
-                            rds_client.stop_db_item(DBInstanceIdentifier=identifier)
-                        elif type == 'cluster':
+                        if rds_type == 'instance':
+                            rds_client.stop_db_instance(DBInstanceIdentifier=identifier)
+                        elif rds_type == 'cluster':
                             rds_client.stop_db_cluster(DBClusterIdentifier=identifier)
                         else:
-                            raise Exception('type should be on of instance or cluster')
+                            raise Exception('rds_type should be on of instance or cluster')
 
-                        logger.info("Stopping RDS %s %s successfully triggered" % (type, arn))
+                        logger.info("Stopping RDS %s %s successfully triggered" % (rds_type, arn))
                 else:
                     logger.info("RDS %s %s is not tagged with %s or tag value is not yes" %
-                                (type, arn, 'stop_or_start_with_cfn_stacks'))
+                                (rds_type, arn, 'stop_or_start_with_cfn_stacks'))
         except botocore.exceptions.NoRegionError:
             logger.error("No region provided!!!")
             raise
