@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 import json
+from botocore.exceptions import ClientError
 
 
 def init_logger():
@@ -140,14 +141,17 @@ def get_lb_access_log_bucket(logger, lbclient, lb):
 
 def empty_bucket(logger, bucket):
     try:
-        logger.info("Connect to bucket %s" % bucket)
+        logger.info("Connect to bucket {}".format(bucket))
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(bucket)
-        logger.info("Start deletion of all objects in bucket %s" % bucket)
+        logger.info("Start deletion of all objects in bucket {}".format(bucket))
         bucket.objects.all().delete()
-        logger.info("Finished deletion of all objects in bucket %s" % bucket)
-    except Exception:
-        logger.error("Error occured while deleting all objects in %s" % bucket)
+        logger.info("Finished deletion of all objects in bucket {}".format(bucket))
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchBucket':
+            logger.warning("Bucket ({}) does not exist error when deleting objects, continuing".format(bucket))
+    except Exception as e:
+        logger.error("Error occured while deleting all objects in {}".format(bucket))
         raise
 
 
