@@ -21,6 +21,9 @@ class Config:
     def aws_authenticated(self):
         return self.aws_authenticated
 
+    def full_ass_tag(self, tag):
+        return "{}{}".format(self.get_ass_tag_prefix(), tag)
+
     def _set_ass_tag_prefix(self):
         if 'ASS_TAG_PREFIX' in os.environ:
             self.ass_tag_prefix = "{}:".format(os.environ['ASS_TAG_PREFIX'])

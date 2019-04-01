@@ -203,9 +203,9 @@ def empty_tagged_s3_buckets(config, aws):
         bucket_name = bucket['Name']
         bucket_arn = "arn:aws:s3:::{}".format(bucket_name)
         config.get_logger().debug("Checking bucket {} ({})".format(bucket_name, bucket_arn))
-        if resource_has_tag(config, s3client, bucket_arn, 'ass_s3_clean_bucket_on_stop', 'yes'):
-            config.get_logger().info("Bucket {} would have been removed".format(bucket_name))
-            empty_bucket(config.get_logger(), bucket_name)
+        if aws.check_tag_on_s3_bucket(bucket_name, config.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes"):
+            config.get_logger().info("Bucket {} will be cleaned".format(bucket_name))
+            aws.empty_bucket(bucket_name)
 
 
 def do_pre_deletion_tasks(config, aws):
