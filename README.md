@@ -1,5 +1,7 @@
 # `aws-delete-tagged-cfn-stacks`: Remove _CloudFormation_ stacks tagged with `stack_deletion_order`
 
+[toc]
+
 ## What it does
 
 ```
@@ -49,3 +51,24 @@ stacks that are not used, for example to save on costs by stopping resources out
 of business hours.
 
 The `Dockerfile` can be used to create a Docker image.
+
+## Resource tags naming conventions and tag list
+
+To solve dependency issues and include resources in the stop/start flow, these resources can
+be tagged. Depending on the resource and the tag, the automatic stop and start will perform
+certain actions on those resources.
+
+The tag _namespace_ used for tagging the resources is `<prefix>:ass:<resourcetype>:<description>`, where:
+
+* `<prefix>` is optional, if set, the _Task Definition_ for `aws-delete-tagged-cfn-stacks`
+  for that account should have an environment variable `ASS_TAG_PREFIX` with the same value.
+* `ass` stands for _Automatic Start and Stop_ and is required and fixed.
+* `<resourcetype>` is the lowercase AWS acronym for the service (`s3`, `rds`, ...)
+* `<description>` is a (very) short description of the permormed action.
+
+### List of existing tags
+
+* `ass:s3:clean_bucket_on_stop`: Remove all objects in a bucket before deleting the stack
+  that owns the bucket.
+* `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and
+  start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
