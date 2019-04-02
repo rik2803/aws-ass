@@ -1,8 +1,11 @@
-# `aws-delete-tagged-cfn-stacks`: Remove _CloudFormation_ stacks tagged with `stack_deletion_order`
+<<<<<<< HEAD
+# _Automatic Stop and Start_: Delete and recreate _CloudFormation_ stacks tagged with `stack_deletion_order`
 
 [toc]
 
 ## What it does
+
+### Deletion
 
 ```
                                   Bitbucket Pipelines                                                                                               AWS
@@ -36,15 +39,62 @@
 
 ```
 
-
 When running the Python script with the appropriate credentials, it will delete:
 * all _CloudFormation_ stacks tagged with a `stack_deletion_order` tag, in increasing
   order of the value of the tag.
 * stop all RDS DB Instances and Clusters tagged with `stop_or_start_with_cfn_stacks` and
   value `yes`
+
+### Re-creation
+
+```
+                                  Bitbucket Pipelines                                                                                               AWS
++----------------------------------------------------+             +-----------------------------------------------------------------------------------+
+|                                                    |             |                                                                                   |
+| +------------------------------------------------+ |             |                                                     Application Environment       |
+| | aws-ixor-sandbox-create-deleted-tagged-cfn-st* +----------------------+                                                                            |
+| +------------------------------------------------+ |             |      |                                                                            |
+|                                                    |             |      |                                                                            |
+|                                                    |             |      |                                                                            |
+|                                                    |             |      |                                                                            |
+|                                                    |             |      |                                   +--------------------------------------+ |
++----------------------------------------------------+             |      |                                   | CloudFormation Stack 01              | |
+                                                                   |      |                                   |   Tags:                              | |
+                                                                   |      |                                   |                                      | |
+                   Docker Hub                                      |      | ECSMgmt ECS Cluster               +--------------------------------------+ |
++----------------------------------------------------+             |  +---|-------------------+                                                        |
+|                                                    |             |  |   |                   |               +--------------------------------------+ |
+| +------------------------------------------------+ |             |  | +-V-----------------+ |     Create    | CloudFormation Stack 03              | |
+| | tryxcom/aws-create-deleted-tagged-cfn-stacks   +--------------------> Scheduled Task    +----+------------>   Tags:                              | |
+| +------------------------------------------------+ |             |  | +-------------------+ |  |            |     stack_deletion_order: 2          | |
+|                                                    |             |  |                       |  |            +--------------------------------------+ |
+| +------------------------------------------------+ |             |  |                       |  |                                                     |
+| |           ....                                 | |             |  |                       |  |            +--------------------------------------+ |
+| +------------------------------------------------+ |             |  |                       |  |  Create    | CloudFormation Stack 02              | |
+|                                                    |             |  |                       |  +------------>   Tags:                              | |
++----------------------------------------------------+             |  |                       |               |     stack_deletion_order: 1          | |
+                                                                   |  +-----------------------+               +--------------------------------------+ |
+                                                                   |                                                                                   |
+                                                                   +-----------------------------------------------------------------------------------+
+
+```
+
+When running the Python script with the appropriate credentials, it will:
+
+* create all deleted _CloudFormation_ stacks tagged with a `stack_deletion_order` tag,
+  in decreasing order of the value of the tag
+* start all RDS DB Instances and Clusters tagged with `stop_or_start_with_cfn_stacks` and
+  value `yes`
+* if the tag `start_wait_until_available` is present and has the value `yes`, the script will
+  wait until the DB is available before continuing to start the other resources. This is
+  useful when applications using the DB fail (and don't retry) when the DB is not available.
+  (**NOTE**: At this moment, no `boto3` waiters are available for Aurora Clusters, this
+  functionality is consequently not available for Aurora) 
   
 *IMPORTANT*: For RDS Clusters ( _Aurora_ ), the tag needs to be on the cluster, not on the
 instance in the cluster.
+
+### How to trigger this?
 
 This can be used in combination with a _Scheduled Task_ to tear down _CloudFormation_
 stacks that are not used, for example to save on costs by stopping resources outside
@@ -72,5 +122,4 @@ These tags can be prefixed as described above.
 
 * `ass:s3:clean_bucket_on_stop`: Remove all objects in a bucket before deleting the stack
   that owns the bucket.
-* `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and
-  start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
+* `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and  start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
