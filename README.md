@@ -126,4 +126,17 @@ These tags can be prefixed as described above.
   that owns the bucket.
 * `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and
   start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
+* `ass:rds:start-wait-until-available`: After starting the RDS instance or cluster, wait until
+  the RDS status is `available` before continuing. This can be useful when a DB client can not
+  recover when the data source is not available. The legacy tag `start_wait_until_available` is
+  still supported for backward compatibility.
 
+## Skipping actions by setting environment variables
+
+Setting any of the following environment variables to `1` will cause the scripts to skip
+all actions related to that variable.
+
+* `ASS_SKIP_PREDELETIONTASKS`
+* `ASS_SKIP_CLOUDFORMATION`
+* `ASS_SKIP_ELASTICBEANSTALK`
+* `ASS_SKIP_RDS`

@@ -1,30 +1,15 @@
 import boto3
 import botocore
 import logging
-import sys
-import random
-import string
-import os
 import json
 import datetime
+import os
+from ASS import Config
+from ASS import AWS
 
-
-def init_logger():
-    logger = logging.getLogger('aws-create-deleted-tagged-cfn-stacks')
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch = logging.StreamHandler(sys.stdout)
-
-    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 1:
-        logger.setLevel(logging.DEBUG)
-        ch.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-        ch.setLevel(logging.INFO)
-
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    return logger
+from botocore.exceptions import ClientError
+from botocore.exceptions import NoRegionError
+from botocore.exceptions import NoCredentialsError
 
 
 def is_nested_stack(logger, stack_list, stack_name):
@@ -45,22 +30,23 @@ def is_nested_stack(logger, stack_list, stack_name):
     return False
 
 
-def get_stacknames_and_creationorder(logger, client):
+def get_stack_names_and_creation_order(cfg, aws):
     stack_list = []
     result = []
     most_recent_only_dict = dict()
     root_stacks_only_dict = dict()
+    client = aws.get_boto3_client('cloudformation')
 
     try:
-        logger.info('Getting all CloudFormation Stacks ...')
+        cfg.get_logger().info(f"Getting all CloudFormation Stacks ...")
         response = client.list_stacks(StackStatusFilter=['DELETE_COMPLETE'])
-        logger.info('Successfully finished getting all CloudFormation templates')
+        cfg.get_logger().info(f"Successfully finished getting all CloudFormation templates")
         stack_list.extend(response['StackSummaries'])
         while 'NextToken' in response:
             response = client.list_stacks(StackStatusFilter=['DELETE_COMPLETE'], NextToken=response['NextToken'])
             stack_list.extend(response['StackSummaries'])
 
-        logger.info('Retrieve the most recently deleted stacks per stack name')
+        cfg.get_logger().info(f"Retrieve the most recently deleted stacks per stack name")
         for stack in stack_list:
             stack_name = stack['StackName']
             if stack_name in most_recent_only_dict:
@@ -68,15 +54,15 @@ def get_stacknames_and_creationorder(logger, client):
                     most_recent_only_dict[stack_name] = stack
             else:
                 most_recent_only_dict[stack_name] = stack
-        logger.info("%i stacks in most recent only stack dict" % len(most_recent_only_dict))
+        cfg.get_logger().info(f"{len(most_recent_only_dict)} stacks in most recent only stack dict")
 
-        logger.info('Remove nested stack from remaining stack list')
+        cfg.get_logger().info(f"Remove nested stack from remaining stack list")
         for stack in most_recent_only_dict.keys():
-            if not is_nested_stack(logger, most_recent_only_dict.keys(), stack):
+            if not is_nested_stack(cfg.get_logger(), most_recent_only_dict.keys(), stack):
                 root_stacks_only_dict[stack] = most_recent_only_dict[stack]
-        logger.info("%i stacks in root only stack dict" % len(root_stacks_only_dict))
+        cfg.get_logger().info(f"{len(root_stacks_only_dict)} stacks in root only stack dict")
 
-        logger.info('Filter remaining stacks on existence of the stack_deletion_order tag')
+        cfg.get_logger().info(f"Filter remaining stacks on existence of the stack_deletion_order tag")
         for stack_name in root_stacks_only_dict:
             response = client.describe_stacks(StackName=root_stacks_only_dict[stack_name]['StackId'])
             stack = response['Stacks'][0]
@@ -92,111 +78,105 @@ def get_stacknames_and_creationorder(logger, client):
                                        })
                         break
 
-    except botocore.exceptions.NoRegionError as e:
-        logger.error("No AWS Credentials provided!!!")
+    except NoRegionError:
+        cfg.get_logger().error(f"No AWS Credentials provided!!!")
         raise
-    except botocore.exceptions.ClientError as e:
-        logger.error(e.response['Error']['Code'])
-        logger.error(e.response['Error']['Message'])
+    except ClientError as e:
+        cfg.get_logger().error(e.response['Error']['Code'])
+        cfg.get_logger().error(e.response['Error']['Message'])
         raise
 
     return result
 
 
-def get_beanstalk_environment_deletion_order_from_state_bucket(logger, environment, state_bucket_name):
+def get_beanstalk_environment_deletion_order_from_state_bucket(cfg, aws, environment):
+    state_bucket_name = cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())
     try:
-        logger.info("Get saved state data for %s from S3 bucket %s " % (environment, state_bucket_name))
+        cfg.get_logger().info(f"Get saved state data for {environment} from S3 bucket {state_bucket_name}")
         environment_dict = json.loads(boto3.resource('s3').
                                       Object(state_bucket_name, environment).
                                       get()['Body'].
                                       read().
                                       decode('utf-8'))
-        logger.info("Saved data is: %s " % environment_dict)
+        cfg.get_logger().info("Saved data is: %s " % environment_dict)
 
         return environment_dict
-    except:
-        logger.warning("An error occurred retrieving stack information from the S3 state bucket")
-        logger.warning("Skipping this beanstalk environment, because it's an environment")
-        logger.warning("that wes deleted outside the stop/start setup.")
+    except Exception:
+        cfg.get_logger().warning(f"An error occurred retrieving stack information from the S3 state bucket")
+        cfg.get_logger().warning(f"Skipping this beanstalk environment, because it's an environment")
+        cfg.get_logger().warning(f"that wes deleted outside the stop/start setup.")
         return None
 
 
-def get_deleted_beanstalk_environment_names_and_creationorder(logger, client, state_bucket_name):
+def get_deleted_beanstalk_environment_names_and_creation_order(cfg, aws):
     result = []
 
     try:
-        logger.info('Getting all terminated BeanStalk environments ...')
-        response = client.describe_environments(IncludeDeleted=True,
-                                                IncludedDeletedBackTo=datetime.datetime(2015, 1, 1))
-        logger.info('Successfully finished getting all BeanStalk environments')
+        cfg.get_logger().info(f"Getting all terminated BeanStalk environments ...")
+        response = aws.get_boto3_client('elasticbeanstalk').describe_environments(
+            IncludeDeleted=True,
+            IncludedDeletedBackTo=datetime.datetime(2015, 1, 1)
+        )
+        cfg.get_logger().info(f"Successfully finished getting all BeanStalk environments")
         env_list = response['Environments']
-    except botocore.exceptions.NoRegionError as e:
-        logger.error("No region provided!!!")
+    except NoRegionError as e:
+        cfg.get_logger().error(f"No region provided!!!")
         raise e
 
     for environment in env_list:
         if environment['Status'] == 'Terminated':
-            ### Get environment deletion order from s3 bucket
-            environment = get_beanstalk_environment_deletion_order_from_state_bucket(logger,
-                                                                                     environment['EnvironmentName'],
-                                                                                     state_bucket_name)
+            # Get environment deletion order from s3 bucket
+            environment = get_beanstalk_environment_deletion_order_from_state_bucket(
+                cfg, aws, environment['EnvironmentName']
+            )
             if environment is not None:
                 result.append(environment)
 
     return result
 
 
-def stack_exists(logger, client, stack_name):
-    try:
-        response = client.describe_stacks(StackName=stack_name)
-        if (len(response['Stacks']) > 0 and
-                response['Stacks'][0]['StackStatus'] in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']):
-            return True
-    except Exception:
-        return False
-
-    return False
-
-
-def get_stack_template_and_create_template(logger, client, stack, template_bucket, state_bucket_name):
-    waiter = client.get_waiter('stack_create_complete')
-    s3_client = boto3.client('s3')
+def get_stack_template_and_create_template(cfg, aws, stack):
+    waiter = aws.get_boto3_client('cloudformation').get_waiter('stack_create_complete')
+    s3_client = aws.get_boto3_client('s3')
+    state_bucket_name = cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())
     stack_dict = {}
     retries = 3
 
     try:
         # First check if stack with same name already exists
-        if not stack_exists(logger, client, stack['stack_name']):
+        if not aws.cfn_stack_exists(stack['stack_name']):
             # Get parameters from state_bucket_name
             try:
-                logger.info("Get saved state data for %s from S3 bucket %s " % (stack['stack_name'], state_bucket_name))
+                cfg.get_logger().info(f"Get saved state for {stack['stack_name']} from S3 bucket {state_bucket_name}")
                 stack_dict = json.loads(
                     boto3.resource('s3').
                         Object(state_bucket_name, stack['stack_name']).
-                        get()['Body'].
+                        get('Body').
                         read().
-                        decode('utf-8'))
-                logger.info("Saved data is: %s " % stack_dict)
-            except:
-                logger.warning("An error occured retrieving stack information from the S3 state bucket")
-                logger.warning("Continuing without restoring data from S3")
+                        decode('utf-8')
+                )
+                cfg.get_logger().info("Saved data is: %s " % stack_dict)
+            except Exception:
+                cfg.get_logger().warning("An error occurred retrieving stack information from the S3 state bucket")
+                cfg.get_logger().warning("Continuing without restoring data from S3")
                 stack_dict['stack_parameters'] = []
 
-            logger.info("Get template string for template %s" % stack['stack_name'])
-            response = client.get_template(StackName=stack['stack_id'], TemplateStage='Processed')
-            template_body = response['TemplateBody']
-            logger.info("Copy the template to the template bucket %s" % template_bucket)
+            cfg.get_logger().info("Get template string for template %s" % stack['stack_name'])
+            response = aws.get_boto3_client('cloudformation').get_template(
+                StackName=stack['stack_id'], TemplateStage='Processed'
+            )
+            cfg.get_logger().info("Copy the template to the template bucket %s" % cfg.get_template_bucket_name())
             s3_client.put_object(
-                Bucket=template_bucket,
-                Body=template_body,
+                Bucket=cfg.get_template_bucket_name(),
+                Body=response['TemplateBody'],
                 Key=stack['stack_name'],
                 ServerSideEncryption='AES256'
             )
-            template_url = 'https://s3.amazonaws.com/' + template_bucket + '/' + stack['stack_name']
+            template_url = 'https://s3.amazonaws.com/' + cfg.get_template_bucket_name() + '/' + stack['stack_name']
 
             for counter in range(0, retries):
-                logger.info("Create the CloudFormation stack from the template of the deleted stack")
-                client.create_stack(
+                cfg.get_logger().info("Create the CloudFormation stack from the template of the deleted stack")
+                aws.get_boto3_client('cloudformation').create_stack(
                     StackName=stack['stack_name'],
                     TemplateURL=template_url,
                     Parameters=stack_dict['stack_parameters'],
@@ -204,76 +184,53 @@ def get_stack_template_and_create_template(logger, client, stack, template_bucke
                     Tags=stack['stack_tags']
                 )
 
-                logger.info("Wait for creation of the stack to finish, iteration %i out of %i" % (counter + 1, retries))
+                cfg.get_logger().info(f"Wait for stack creation to finish, iteration {counter+1} out of {retries}")
                 try:
                     waiter.wait(StackName=stack['stack_name'])
-                    logger.info("Stack creation finished in  iteration %i out of %i" % (counter + 1, retries))
+                    cfg.get_logger().info("Stack creation finished in  iteration %i out of %i" % (counter + 1, retries))
                     # Leave the loop upon success
                     break
                 except botocore.exceptions.WaiterError as e:
                     if counter == retries - 1:
-                        logger.error("Stack re-creation for %s has failed, check the CloudFormation logs." %
-                                     stack['stack_name'])
-                        logger.error(e)
+                        cfg.get_logger().error("Stack re-creation for %s has failed, check the CloudFormation logs." %
+                                               stack['stack_name'])
+                        cfg.get_logger().error(e)
                         raise
                     else:
-                        logger.warning("Stack creation failed, retrying after deletion ...")
-                        logger.info("Start deletion of stack %s" % stack['stack_name'])
+                        cfg.get_logger().warning("Stack creation failed, retrying after deletion ...")
+                        cfg.get_logger().info("Start deletion of stack %s" % stack['stack_name'])
                         try:
-                            client.delete_stack(StackName=stack['stack_name'])
-                            client.get_waiter('stack_delete_complete').wait(StackName=stack['stack_name'])
-                            logger.info("Deletion of stack %s was successful" % stack['stack_name'])
-                        except:
-                            logger.error("An error occurred while deleting stack %s" % stack['stack_name'])
-                            logger.error("No use to retry when stack already exists (in a failed state).")
+                            aws.get_boto3_client('cloudformation').delete_stack(StackName=stack['stack_name'])
+                            aws.get_boto3_client('cloudformation').get_waiter('stack_delete_complete')\
+                                                                  .wait(StackName=stack['stack_name'])
+                            cfg.get_logger().info("Deletion of stack %s was successful" % stack['stack_name'])
+                        except Exception:
+                            cfg.get_logger().error("An error occurred while deleting stack %s" % stack['stack_name'])
+                            cfg.get_logger().error("No use to retry when stack already exists (in a failed state).")
                             raise
 
         else:
-            logger.warning("Skipping creation of stack %s because stack with same name already exists" %
-                           stack['stack_name'])
+            cfg.get_logger().warning("Skipping creation of stack %s because stack with same name already exists" %
+                                     stack['stack_name'])
 
-
-    except Exception as e:
+    except ClientError as e:
         if e.response['Error']['Code'] == 'AlreadyExistsException':
-            logger.warning(
+            cfg.get_logger().warning(
                 "The stack already exists and probably is in a ROLLBACK_COMPLETE state and needs manual removal")
         raise
 
 
-def create_template_bucket(logger, bucket):
-    try:
-        logger.info("Connect to bucket %s" % bucket)
-        s3 = boto3.resource('s3')
-        logger.info("Start creation of bucket %s" % bucket)
-        s3.create_bucket(Bucket=bucket,
-                         CreateBucketConfiguration={'LocationConstraint': get_region()})
-        logger.info("Finished creation of bucket %s" % bucket)
-    except Exception:
-        logger.error("An error occurred while creating bucket %s" % bucket)
-        raise
+def start_tagged_rds_clusters_and_instances(cfg, aws):
+    if os.getenv('ASS_SKIP_RDS', '0') == '1':
+        cfg.get_logger().info(f"Skipping RDS tasks because "
+                              f"envvar ASS_SKIP_RDS is set")
+        return True
 
+    def start_rds(rds_type, main_key, identifier_key, arn_key, status_key):
 
-def remove_template_bucket(logger, bucket):
-    try:
-        logger.info("Connect to bucket %s" % bucket)
-        s3 = boto3.resource('s3')
-        bucket = s3.Bucket(bucket)
-        logger.info("Start deletion of all objects in bucket %s" % bucket)
-        bucket.objects.all().delete()
-        logger.info("Start deletion of bucket %s" % bucket)
-        bucket.delete()
-        logger.info("Finished deletion of bucket %s" % bucket)
-    except Exception:
-        logger.error("An error occurred while deleting bucket %s" % bucket)
-        raise
+        rds_client = aws.get_boto3_client('rds')
 
-
-def start_tagged_rds_clusters_and_instances(logger):
-    def start_rds(logger, rds_type, main_key, identifier_key, arn_key, status_key):
-
-        rds_client = boto3.client('rds', region_name=get_region())
-
-        logger.info("Get list of all RDS {}s".format(rds_type))
+        cfg.get_logger().info(f"Get list of all RDS {rds_type}s")
         try:
             if rds_type == 'instance':
                 response = rds_client.describe_db_instances()
@@ -287,51 +244,61 @@ def start_tagged_rds_clusters_and_instances(logger):
                 arn = item[arn_key]
                 status = item[status_key]
 
-                if resource_has_tag(rds_client, arn, 'stop_or_start_with_cfn_stacks', 'yes'):
-                    logger.info("RDS %s %s is tagged with %s and tag value is yes" %
-                                (rds_type, arn, 'stop_or_start_with_cfn_stacks'))
-                    logger.info("Starting RDS %s %s" % (rds_type, arn))
+                if (aws.resource_has_tag(rds_client, arn, 'stop_or_start_with_cfn_stacks', 'yes') or
+                        aws.resource_has_tag(rds_client, arn, cfg.full_ass_tag('ass:rds:include'), 'yes')):
+                    cfg.get_logger().info(f"RDS {rds_type} {arn} is tagged with {cfg.full_ass_tag('ass:rds:include')} "
+                                          f"and tag value is yes")
+                    cfg.get_logger().info(f"Starting RDS {rds_type} {arn}")
                     if status != 'stopped':
-                        logger.info("RDS %s %s is in state %s ( != stopped ): Skipping start" %
-                                    (rds_type, identifier, status))
+                        cfg.get_logger().info(f"RDS {rds_type} {identifier} in state "
+                                              f"{status} (!= stopped): Skipping start")
                     elif rds_type == 'instance' and 'DBClusterIdentifier' in item:
                         # Skip instances that are part of a RDS Cluster, they will be processed
                         # in the DBCluster part, when rds_type is 'cluster'
-                        logger.info("RDS %s %s is part of RDS Cluster %s: Skipping start" %
-                                    (rds_type, item['DBInstanceIdentifier'], item['DBClusterIdentifier']))
+                        cfg.get_logger().info("RDS %s %s is part of RDS Cluster %s: Skipping start".format(
+                            rds_type, item['DBInstanceIdentifier'], item['DBClusterIdentifier']
+                        ))
                     else:
                         if rds_type == 'instance':
                             rds_client.start_db_instance(DBInstanceIdentifier=item['DBInstanceIdentifier'])
                         elif rds_type == 'cluster':
                             rds_client.start_db_cluster(DBClusterIdentifier=item['DBClusterIdentifier'])
 
-                        if resource_has_tag(rds_client, arn, 'start_wait_until_available', 'yes'):
-                            logger.info("RDS {} is tagged with start_wait_until_available and tag value is yes".format(identifier))
+                        if (aws.resource_has_tag(rds_client, arn, 'start_wait_until_available', 'yes') or
+                                aws.resource_has_tag(
+                                    rds_client, arn, cfg.full_ass_tag('ass:rds:start-wait-until-available'), 'yes')):
+                            cfg.get_logger().info(f"RDS {identifier} is tagged with "
+                                                  f"{cfg.full_ass_tag('ass:rds:start-wait-until-available')} "
+                                                  f"and tag value is yes")
                             if rds_type == 'cluster':
-                                logger.warning("No waiters in boto3 for Aurora Clusters (yet).")
-                                logger.warning("Cluster start will continue in parallel.")
+                                cfg.get_logger().warning("No waiters in boto3 for Aurora Clusters (yet).")
+                                cfg.get_logger().warning("Cluster start will continue in parallel.")
                             elif rds_type == 'instance':
-                                logger.info("Waiting until instance {} is available".format(identifier))
+                                cfg.get_logger().info("Waiting until instance {} is available".format(identifier))
                                 rds_client.get_waiter('db_instance_available').wait(DBInstanceIdentifier=identifier)
-                                logger.info("Instance {} is available now".format(identifier))
+                                cfg.get_logger().info("Instance {} is available now".format(identifier))
                             else:
-                                raise Exception('rds_type must be one of instance or cluster')
+                                raise ValueError('rds_type must be one of instance or cluster')
 
                         else:
-                            logger.info("Starting RDS %s %s successfully triggered" % (rds_type, arn))
+                            cfg.get_logger().info(f"Starting RDS {rds_type} {arn} successfully triggered")
                 else:
-                    logger.info("RDS %s %s is not tagged with %s or tag value is not yes" %
-                                (rds_type, arn, 'stop_or_start_with_cfn_stacks'))
-        except botocore.exceptions.NoRegionError as e:
-            logger.error("No region provided!!!")
+                    cfg.get_logger().info("RDS %s %s is not tagged with %s or tag value is not yes".format(
+                        rds_type, arn, 'stop_or_start_with_cfn_stacks'))
+
+        except NoRegionError:
+            cfg.get_logger().error("No region provided!!!")
             raise
-        except botocore.exceptions.NoCredentialsError as e:
-            logger.error("No credentials provided!!!")
+        except NoCredentialsError:
+            cfg.get_logger().error("No credentials provided!!!")
             raise
 
-    logger.info("Starting RDS clusters and instances tagged with stop_or_start_with_cfn_stacks=yes")
-    start_rds(logger, 'instance', 'DBInstances', 'DBInstanceIdentifier', 'DBInstanceArn', 'DBInstanceStatus')
-    start_rds(logger, 'cluster', 'DBClusters', 'DBClusterIdentifier', 'DBClusterArn', 'Status')
+        cfg.get_logger().info(f"Finished getting list of all RDS {rds_type}s")
+
+    cfg.get_logger().info("Starting RDS clusters and instances tagged with ass:rds:include=yes")
+    start_rds('instance', 'DBInstances', 'DBInstanceIdentifier', 'DBInstanceArn', 'DBInstanceStatus')
+    start_rds('cluster', 'DBClusters', 'DBClusterIdentifier', 'DBClusterArn', 'Status')
+    cfg.get_logger().info("Finished starting RDS clusters and instances tagged with ass:rds:include=yes")
 
 
 def resource_has_tag(client, resource_arn, tag_name, tag_value):
@@ -346,71 +313,74 @@ def resource_has_tag(client, resource_arn, tag_name, tag_value):
     return False
 
 
-def create_deleted_tagged_cloudformation_stacks(logger, template_bucket_name, state_bucket_name):
-    client = boto3.client('cloudformation', region_name=get_region())
+def create_deleted_tagged_cloudformation_stacks(cfg, aws):
+    if os.getenv('ASS_SKIP_CLOUDFORMATION', '0') == '1':
+        cfg.get_logger().info(f"Skipping CloudFormation template creation because "
+                              f"envvar ASS_SKIP_CLOUDFORMATION is set")
+        return True
 
-    result = get_stacknames_and_creationorder(logger, client)
+    result = get_stack_names_and_creation_order(cfg, aws)
 
     for stack in sorted(result, key=lambda k: k['stack_deletion_order'], reverse=True):
-        get_stack_template_and_create_template(logger, client, stack, template_bucket_name, state_bucket_name)
-        logger.info("Creation of previously deleted tagged CloudFormation stack %s ended successfully" %
-                    stack['stack_name'])
+        get_stack_template_and_create_template(cfg, aws, stack)
+        cfg.get_logger().info(f"Creation of previously deleted tagged CloudFormation "
+                                 f"stack {stack['stack_name']} ended successfully")
 
-    logger.info('Creation of all previously deleted tagged CloudFormation stacks ended successfully')
+    cfg.get_logger().info(f"Creation of all previously deleted tagged CloudFormation stacks ended successfully")
 
 
-def create_deleted_tagged_beanstalk_environments(logger, state_bucket_name):
-    logger.info("Start creation of deleted BeanStalk environments tagged with environment_deletion_order")
-    client = boto3.client('elasticbeanstalk', region_name=get_region())
+def create_deleted_tagged_beanstalk_environments(cfg, aws):
+    if os.getenv('ASS_SKIP_ELASTICBEANSTALK', '0') == '1':
+        cfg.get_logger().info(f"Skipping Elastic Beanstalk tasks because "
+                              f"envvar ASS_SKIP_ELASTICBEANSTALK is set")
+        return True
 
-    result = get_deleted_beanstalk_environment_names_and_creationorder(logger, client, state_bucket_name)
+    cfg.get_logger().info(f"Start creation of deleted BeanStalk environments tagged with environment_deletion_order")
+
+    result = get_deleted_beanstalk_environment_names_and_creation_order(cfg, aws)
 
     for environment in sorted(result, key=lambda k: k['environment_deletion_order'], reverse=True):
         try:
-            client.rebuild_environment(EnvironmentId=environment['environment_id'])
-            logger.info("Async re-creation of terminated BeanStalk environment %s ended successfully" %
-                        environment['environment_name'])
-            logger.info("Please allow a few minutes for the environment to start.")
+            aws.get_boto3_client('elasticbeanstalk').rebuild_environment(EnvironmentId=environment['environment_id'])
+            cfg.get_logger().info(f"Async re-creation of terminated BeanStalk environment "
+                                  f"{environment['environment_name']} ended successfully")
+            cfg.get_logger().info(f"Please allow a few minutes for the environment to start.")
         except Exception:
-            logger.error("Async re-creation of terminated BeanStalk environment %s failed" %
-                         environment['environment_name'])
+            cfg.get_logger().error(f"Async re-creation of terminated BeanStalk environment "
+                                   f"{environment['environment_name']} failed")
             raise
 
-    logger.info('Creation of terminated BeanStalk environments ended')
+    cfg.get_logger().info(f"Creation of terminated BeanStalk environments ended")
 
 
 def get_region():
-    return (boto3.session.Session().region_name)
+    return boto3.session.Session().region_name
 
 
 def get_account_id():
-    return (boto3.client("sts").get_caller_identity()["Account"])
+    return boto3.client("sts").get_caller_identity()["Account"]
 
 
 def main():
+    cfg = Config("aws-ass-start")
+    aws = AWS(cfg.get_logger())
+
     try:
-        logger = init_logger()
-        region = get_region()
-        account_id = get_account_id()
-        state_bucket_name = "%s-%s-stop-start-state-bucket" % (region, account_id)
+        cfg.get_logger().info(f"Region:       {aws.get_region()}")
+        cfg.get_logger().info(f"AccountId:    {aws.get_account_id()}")
+        cfg.get_logger().info(f"State Bucket: {cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())}")
 
-        logger.info("Region:       %s" % region)
-        logger.info("AccountId:    %s" % account_id)
-        logger.info("State Bucket: %s" % state_bucket_name)
+        aws.create_bucket(cfg.get_template_bucket_name())
 
-        template_bucket_name = 'stack-recreation-bucket-' + \
-                               ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
-        create_template_bucket(logger, template_bucket_name)
-
-        start_tagged_rds_clusters_and_instances(logger)
-        create_deleted_tagged_cloudformation_stacks(logger, template_bucket_name, state_bucket_name)
-        create_deleted_tagged_beanstalk_environments(logger, state_bucket_name)
+        start_tagged_rds_clusters_and_instances(cfg, aws)
+        create_deleted_tagged_cloudformation_stacks(cfg, aws)
+        create_deleted_tagged_beanstalk_environments(cfg, aws)
     except Exception as e:
-        logger.error("An exception occurred")
-        logger.error(e)
+        cfg.get_logger().error("An exception occurred")
+        cfg.get_logger().error(e)
     finally:
-        if template_bucket_name:
-            remove_template_bucket(logger, template_bucket_name)
+        if cfg.get_template_bucket_name():
+            aws.remove_bucket(cfg.get_template_bucket_name())
         logging.shutdown()
 
 

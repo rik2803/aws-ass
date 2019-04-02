@@ -1,6 +1,8 @@
 import logging
 import os
 import sys
+import random
+import string
 
 
 class Config:
@@ -8,6 +10,7 @@ class Config:
         self._set_ass_tag_prefix()
         self._init_logger(project_name)
         self.aws_authenticated = False
+        self.template_bucket_name = None
 
     def get_logger(self):
         return self.logger
@@ -15,8 +18,15 @@ class Config:
     def get_ass_tag_prefix(self):
         return self.ass_tag_prefix
 
-    def get_state_bucket_name(self, region, account_id):
+    @staticmethod
+    def get_state_bucket_name(region, account_id):
         return "{}-{}-stop-start-state-bucket".format(region, account_id)
+
+    def get_template_bucket_name(self):
+        if self.template_bucket_name is None:
+            random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
+            self.template_bucket_name = f"stack-recreation-bucket-{random_string}"
+        return self.template_bucket_name
 
     def aws_authenticated(self):
         return self.aws_authenticated
