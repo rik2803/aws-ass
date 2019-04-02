@@ -66,7 +66,9 @@ The tag _namespace_ used for tagging the resources is `<prefix>:ass:<resourcetyp
 * `<resourcetype>` is the lowercase AWS acronym for the service (`s3`, `rds`, ...)
 * `<description>` is a (very) short description of the permormed action.
 
-### List of existing tags
+### List of existing _ASS_ tags
+
+These tags can be prefixed as described above.
 
 * `ass:s3:clean_bucket_on_stop`: Remove all objects in a bucket before deleting the stack
   that owns the bucket.
