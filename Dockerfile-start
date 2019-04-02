@@ -1,0 +1,9 @@
+FROM python:3.7-alpine3.7
+
+ADD requirements.txt /requirements.txt
+ADD aws-ass-start.py /aws-ass-start.py
+ADD ASS /ASS
+
+RUN pip install -r /requirements.txt
+
+ENTRYPOINT ["python3", "/aws-ass-start.py"]

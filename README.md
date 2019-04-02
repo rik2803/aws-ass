@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-# _Automatic Stop and Start_: Delete and recreate _CloudFormation_ stacks tagged with `stack_deletion_order`
+# _Automatic Stop and Start_ (ASS): Delete and recreate _CloudFormation_ stacks tagged with `stack_deletion_order`
 
 [toc]
 
@@ -114,12 +114,16 @@ The tag _namespace_ used for tagging the resources is `<prefix>:ass:<resourcetyp
   for that account should have an environment variable `ASS_TAG_PREFIX` with the same value.
 * `ass` stands for _Automatic Start and Stop_ and is required and fixed.
 * `<resourcetype>` is the lowercase AWS acronym for the service (`s3`, `rds`, ...)
-* `<description>` is a (very) short description of the permormed action.
+* `<description>` is a (very) short description of the performed action.
 
 ### List of existing _ASS_ tags
 
 These tags can be prefixed as described above.
 
-* `ass:s3:clean_bucket_on_stop`: Remove all objects in a bucket before deleting the stack
+* `ass:cfn:deletion-order`: Determine the order of deletion of the _CloudFormation_ stacks.
+  The `stack_deletion_order` (no prefix allowed) is still supported for backward compatibility.
+* `ass:s3:clean-bucket-on-stop`: Remove all objects in a bucket before deleting the stack
   that owns the bucket.
-* `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and  start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
+* `ass:rds:include`: Stop the RDS instance or cluster after all stacks have been stopped and
+  start the RDS instance or cluster before re-creating the _CloudFormation_ stacks.
+
