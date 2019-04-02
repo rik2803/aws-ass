@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # _Automatic Stop and Start_ (ASS): Delete and recreate _CloudFormation_ stacks tagged with `stack_deletion_order`
 
 [toc]
