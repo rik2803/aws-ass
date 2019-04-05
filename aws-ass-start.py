@@ -151,12 +151,13 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                 stack_dict = json.loads(
                     boto3.resource('s3').
                         Object(state_bucket_name, stack['stack_name']).
-                        get('Body').
+                        get()['Body'].
                         read().
                         decode('utf-8')
                 )
                 cfg.get_logger().info("Saved data is: %s " % stack_dict)
-            except Exception:
+            except Exception as e:
+                cfg.get_logger().debug(e)
                 cfg.get_logger().warning("An error occurred retrieving stack information from the S3 state bucket")
                 cfg.get_logger().warning("Continuing without restoring data from S3")
                 stack_dict['stack_parameters'] = []
@@ -283,7 +284,7 @@ def start_tagged_rds_clusters_and_instances(cfg, aws):
                         else:
                             cfg.get_logger().info(f"Starting RDS {rds_type} {arn} successfully triggered")
                 else:
-                    cfg.get_logger().info("RDS %s %s is not tagged with %s or tag value is not yes".format(
+                    cfg.get_logger().info("RDS {} {} is not tagged with {} or tag value is not yes".format(
                         rds_type, arn, 'stop_or_start_with_cfn_stacks'))
 
         except NoRegionError:
