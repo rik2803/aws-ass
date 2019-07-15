@@ -294,7 +294,7 @@ def delete_tagged_cloudformation_stacks(cfg, aws):
                               f"envvar ASS_SKIP_CLOUDFORMATION is set")
         return True
 
-    cfg.get_logger().info(f"Start deletion of CloudFormation stacks tagged with {cfg.full_ass_tag('rds:include')}")
+    cfg.get_logger().info(f"Start deletion of CloudFormation stacks tagged with {cfg.full_ass_tag('ass:cfn:deletion-order')}")
     client = boto3.client('cloudformation', region_name=aws.get_region())
 
     result = get_stack_names_and_deletion_order(cfg, aws, client)
