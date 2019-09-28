@@ -2,6 +2,29 @@
 
 [toc]
 
+## Build and publish the images
+
+The commands are run from the root of this repository.
+
+### Build the `tryxcom/aws-ass-stop` image
+
+```bash
+docker login
+docker build -f ./Dockerfile-stop -t tryxcom/aws-ass-stop . 
+docker tag tryxcom/aws-ass-stop tryxcom/aws-ass-stop:latest
+docker push tryxcom/aws-ass-stop:latest
+```
+
+
+### Build the `tryxcom/aws-ass-start` image
+
+```bash
+docker login
+docker build -f ./Dockerfile-start -t tryxcom/aws-ass-start . 
+docker tag tryxcom/aws-ass-start tryxcom/aws-ass-start:latest
+docker push tryxcom/aws-ass-start:latest
+```
+
 ## What it does
 
 ### Deletion
