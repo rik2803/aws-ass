@@ -61,13 +61,16 @@ def get_beanstalk_env_names_and_deletion_order(cfg, aws, client):
         raise e
 
     for environment in env_list:
-        for tag in client.list_tags_for_resource(ResourceArn=environment['EnvironmentArn'])['ResourceTags']:
-            if tag['Key'] == 'environment_deletion_order' and int(tag['Value']) > 0:
-                result.append({"environment_name": environment['EnvironmentName'],
-                               "environment_id": environment['EnvironmentId'],
-                               "environment_arn": environment['EnvironmentArn'],
-                               "environment_deletion_order": int(tag['Value'])
-                               })
+        try:
+            for tag in client.list_tags_for_resource(ResourceArn=environment['EnvironmentArn'])['ResourceTags']:
+                if tag['Key'] == 'environment_deletion_order' and int(tag['Value']) > 0:
+                    result.append({"environment_name": environment['EnvironmentName'],
+                                   "environment_id": environment['EnvironmentId'],
+                                   "environment_arn": environment['EnvironmentArn'],
+                                   "environment_deletion_order": int(tag['Value'])
+                                   })
+        except:
+            cfg.get_logger().error(f"Resource {environment['EnvironmentArn']} not found, continuing.")
     return result
 
 
@@ -325,17 +328,17 @@ def save_stack_parameters_to_state_bucket(cfg, aws, stack):
 
 def save_beanstalk_environment_deletion_order_to_state_bucket(cfg, aws, client, environment):
     cfg.get_logger().info(
-        "Looking for environment_deletion_order tag and saving in to bucket %s" % cfg.get_state_bucket_name())
+        "Looking for environment_deletion_order tag and saving in to bucket %s" % cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
     for tag in client.list_tags_for_resource(ResourceArn=environment['environment_arn'])['ResourceTags']:
         if tag['Key'] == 'environment_deletion_order':
             try:
                 cfg.get_logger().info(f"Tag environment_deletion_order={tag['Value']} found")
                 boto3.resource('s3'). \
-                    Bucket(cfg.get_state_bucket_name()). \
+                    Bucket(cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())). \
                     put_object(Key=environment['environment_name'],
                                Body=json.dumps(environment))
                 cfg.get_logger().info(f"Tag environment_deletion_order successfully written to "
-                                      f"s3://{cfg.get_state_bucket_name()}/{environment['environment_name']}")
+                                      f"s3://{cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())}/{environment['environment_name']}")
             except Exception:
                 cfg.get_logger().error(f"Error saving beanstalk environment_deletion_order to bucket")
                 raise
