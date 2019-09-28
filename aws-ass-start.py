@@ -104,7 +104,7 @@ def get_beanstalk_environment_deletion_order_from_state_bucket(cfg, aws, environ
     except Exception:
         cfg.get_logger().warning(f"An error occurred retrieving stack information from the S3 state bucket")
         cfg.get_logger().warning(f"Skipping this beanstalk environment, because it's an environment")
-        cfg.get_logger().warning(f"that wes deleted outside the stop/start setup.")
+        cfg.get_logger().warning(f"that was deleted outside the stop/start setup.")
         return None
 
 
@@ -185,7 +185,7 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                     Tags=stack['stack_tags']
                 )
 
-                cfg.get_logger().info(f"Wait for stack creation to finish, iteration {counter+1} out of {retries}")
+                cfg.get_logger().info(f"Wait for stack creation to finish, iteration {counter + 1} out of {retries}")
                 try:
                     waiter.wait(StackName=stack['stack_name'])
                     cfg.get_logger().info("Stack creation finished in  iteration %i out of %i" % (counter + 1, retries))
@@ -202,8 +202,8 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                         cfg.get_logger().info("Start deletion of stack %s" % stack['stack_name'])
                         try:
                             aws.get_boto3_client('cloudformation').delete_stack(StackName=stack['stack_name'])
-                            aws.get_boto3_client('cloudformation').get_waiter('stack_delete_complete')\
-                                                                  .wait(StackName=stack['stack_name'])
+                            aws.get_boto3_client('cloudformation').get_waiter('stack_delete_complete') \
+                                .wait(StackName=stack['stack_name'])
                             cfg.get_logger().info("Deletion of stack %s was successful" % stack['stack_name'])
                         except Exception:
                             cfg.get_logger().error("An error occurred while deleting stack %s" % stack['stack_name'])
@@ -325,7 +325,7 @@ def create_deleted_tagged_cloudformation_stacks(cfg, aws):
     for stack in sorted(result, key=lambda k: k['stack_deletion_order'], reverse=True):
         get_stack_template_and_create_template(cfg, aws, stack)
         cfg.get_logger().info(f"Creation of previously deleted tagged CloudFormation "
-                                 f"stack {stack['stack_name']} ended successfully")
+                              f"stack {stack['stack_name']} ended successfully")
 
     cfg.get_logger().info(f"Creation of all previously deleted tagged CloudFormation stacks ended successfully")
 
