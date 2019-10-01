@@ -4,6 +4,7 @@ import logging
 import json
 import datetime
 import os
+import time
 from ASS import Config
 from ASS import AWS
 
@@ -43,6 +44,8 @@ def get_stack_names_and_creation_order(cfg, aws):
         cfg.get_logger().info(f"Successfully finished getting all CloudFormation templates")
         stack_list.extend(response['StackSummaries'])
         while 'NextToken' in response:
+            cfg.get_logger().info("Sleeping a second between calls to list_stacks to avoid rate errors")
+            time.sleep(1)
             response = client.list_stacks(StackStatusFilter=['DELETE_COMPLETE'], NextToken=response['NextToken'])
             stack_list.extend(response['StackSummaries'])
 
