@@ -20,7 +20,7 @@ class Config:
 
     @staticmethod
     def get_state_bucket_name(region, account_id):
-        return "{}-{}-stop-start-state-bucket".format(region, account_id)
+        return f"{region}-{account_id}-stop-start-state-bucket"
 
     def get_template_bucket_name(self):
         if self.template_bucket_name is None:
@@ -32,11 +32,11 @@ class Config:
         return self.aws_authenticated
 
     def full_ass_tag(self, tag):
-        return "{}{}".format(self.get_ass_tag_prefix(), tag)
+        return f"{self.get_ass_tag_prefix()}{tag}"
 
     def _set_ass_tag_prefix(self):
         if 'ASS_TAG_PREFIX' in os.environ:
-            self.ass_tag_prefix = "{}:".format(os.environ['ASS_TAG_PREFIX'])
+            self.ass_tag_prefix = f"{os.environ['ASS_TAG_PREFIX']}:"
         else:
             self.ass_tag_prefix = ""
 
