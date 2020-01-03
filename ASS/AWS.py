@@ -20,24 +20,24 @@ class AWS:
 
     def empty_bucket(self, bucket):
         try:
-            self.logger.info("Connect to bucket {}".format(bucket))
+            self.logger.info(f"Connect to bucket {bucket}")
             s3 = boto3.resource('s3')
             bucket = s3.Bucket(bucket)
-            self.logger.info("Start deletion of all objects in bucket {}".format(bucket))
+            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
             bucket.objects.all().delete()
-            self.logger.info("Finished deletion of all objects in bucket {}".format(bucket))
+            self.logger.info(f"Finished deletion of all objects in bucket {bucket}")
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchBucket':
-                self.logger.warning("Bucket ({}) does not exist error when deleting objects, continuing".format(bucket))
+                self.logger.warning(f"Bucket ({bucket}) does not exist error when deleting objects, continuing")
         except Exception:
-            self.logger.error("Error occurred while deleting all objects in {}".format(bucket))
+            self.logger.error(f"Error occurred while deleting all objects in {bucket}")
             raise
 
     def is_aws_authenticated(self):
         return self.aws_authenticated
 
     def s3_has_tag(self, bucket_name, tag_name, tag_value):
-        self.logger.debug("Checking bucket {} for tag {} with value {}".format(bucket_name, tag_name, tag_value))
+        self.logger.debug(f"Checking bucket {bucket_name} for tag {tag_name} with value {tag_value}")
         s3_client = boto3.client('s3')
         try:
             response = s3_client.get_bucket_tagging(Bucket=bucket_name)
@@ -45,21 +45,20 @@ class AWS:
             for tag in response['TagSet']:
                 self.logger.debug(tag)
                 if tag['Key'] == tag_name and tag['Value'] == tag_value:
-                    self.logger.debug("Bucket {} has tag {} with value {}".format(bucket_name, tag_name, tag_value))
+                    self.logger.debug(f"Bucket {bucket_name} has tag {tag_name} with value {tag_value}")
                     return True
         except ClientError:
-            self.logger.debug("No TagSet found or bucket nog found for bucket {}".format(bucket_name))
+            self.logger.debug(f"No TagSet found or bucket nog found for bucket {bucket_name}")
             return False
 
     def resource_has_tag(self, client, resource_arn, tag_name, tag_value):
-        self.logger.debug("Checking resource {} for tag {} with value {}".format(resource_arn, tag_name, tag_value))
+        self.logger.debug(f"Checking resource {resource_arn} for tag {tag_name} with value {tag_value}")
         try:
             response = client.list_tags_for_resource(ResourceName=resource_arn)
             self.logger.debug(response['TagList'])
             for tag in response['TagList']:
                 if tag['Key'] == tag_name and tag['Value'] == tag_value:
-                    self.logger.debug(
-                        "Resource {} has tag {} with value {}".format(resource_arn, tag_name, tag_value))
+                    self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag_value}")
                     return True
         except Exception:
             return False
@@ -107,30 +106,30 @@ class AWS:
 
     def create_bucket(self, bucket_name):
         try:
-            self.logger.info("Create bucket {} if it does not already exist.".format(bucket_name))
+            self.logger.info(f"Create bucket {bucket_name} if it does not already exist.")
             s3 = boto3.resource('s3')
             if s3.Bucket(bucket_name) in s3.buckets.all():
-                self.logger.info("Bucket {} already exists".format(bucket_name))
+                self.logger.info(f"Bucket {bucket_name} already exists")
             else:
-                self.logger.info("Start creation of bucket {}".format(bucket_name))
+                self.logger.info(f"Start creation of bucket {bucket_name}")
                 s3.create_bucket(Bucket=bucket_name,
                                  CreateBucketConfiguration={'LocationConstraint': self.get_region()})
-                self.logger.info("Finished creation of bucket {}".format(bucket_name))
+                self.logger.info(f"Finished creation of bucket {bucket_name}")
         except Exception:
             raise
 
     def remove_bucket(self, bucket_name):
         try:
-            self.logger.info("Connect to bucket %s" % bucket_name)
+            self.logger.info(f"Connect to bucket {bucket_name}")
             s3 = boto3.resource('s3')
             bucket = s3.Bucket(bucket_name)
-            self.logger.info("Start deletion of all objects in bucket %s" % bucket)
+            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
             bucket.objects.all().delete()
-            self.logger.info("Start deletion of bucket %s" % bucket)
+            self.logger.info(f"Start deletion of bucket {bucket}")
             bucket.delete()
-            self.logger.info("Finished deletion of bucket %s" % bucket)
+            self.logger.info(f"Finished deletion of bucket {bucket}")
         except Exception:
-            self.logger.error("An error occurred while deleting bucket %s" % bucket_name)
+            self.logger.error(f"An error occurred while deleting bucket {bucket_name}")
             raise
 
 
