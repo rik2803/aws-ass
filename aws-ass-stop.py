@@ -4,6 +4,7 @@ import json
 import os
 from ASS import Config
 from ASS import AWS
+from ASS import Notification
 
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoRegionError
@@ -25,6 +26,7 @@ def get_stack_names_and_deletion_order(cfg, aws, client):
         stack_list = response['Stacks']
     except NoRegionError as e:
         cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided.")
         raise e
 
     for stack in stack_list:
@@ -58,6 +60,7 @@ def get_beanstalk_env_names_and_deletion_order(cfg, aws, client):
         env_list = response['Environments']
     except NoRegionError as e:
         cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided.")
         raise e
 
     for environment in env_list:
@@ -84,8 +87,12 @@ def delete_stack(cfg, client, stack):
         waiter.wait(StackName=stack['stack_name'])
     except WaiterError as e:
         cfg.get_logger().error(
-            "Stack deletion for %s has failed, check the CloudFormation logs." % stack['stack_name'])
+            f"Stack deletion for {stack['stack_name']} has failed, check the CloudFormation logs.")
         cfg.get_logger().error(e)
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"Stack deletion for {stack['stack_name']} has failed, check the CloudFormation logs."
+        )
         raise
     except Exception as e:
         raise e
@@ -100,8 +107,12 @@ def terminate_beanstalk_environment(cfg, aws, client, environment):
         client.terminate_environment(EnvironmentName=environment['environment_name'])
     except Exception as e:
         cfg.get_logger().error(
-            "Environment deletion for %s has failed, check the logs." % environment['environment_name'])
+            f"Environment deletion for {environment['environment_name']} has failed, check the logs.")
         cfg.get_logger().error(e)
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"Stack deletion for {environment['environment_name']} has failed, check the CloudFormation logs."
+        )
         raise
 
     return True
@@ -127,6 +138,10 @@ def get_lb_access_log_bucket(cfg, lb_client, lb):
             return ''
     except Exception:
         cfg.get_logger().error("An error occurred while determining the loadbalancer access log bucket name")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"An error occurred while determining the loadbalancer access log bucket name"
+        )
         raise
 
 
@@ -144,6 +159,10 @@ def empty_bucket(cfg, bucket):
     except Exception as e:
         cfg.get_logger().error(f"Error occurred while deleting all objects in {bucket}")
         cfg.get_logger().debug(e)
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"Error occurred while deleting all objects in {bucket}"
+        )
         raise
 
 
@@ -161,7 +180,11 @@ def disable_lb_access_logs(cfg, lb_client, lb):
         )
         cfg.get_logger().info(f"Access logs for loadbalancer {lb} successfully disabled")
     except Exception:
-        cfg.get_logger().error("An error occurred while disabling the loadbalancer access logs")
+        cfg.get_logger().error(f"An error occurred while disabling the loadbalancer access logs")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"An error occurred while disabling the loadbalancer access logs"
+        )
         raise
 
 
@@ -175,9 +198,15 @@ def empty_lb_access_log_buckets(cfg, aws):
         cfg.get_logger().info("Getting LB ARNs finished successfully")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided!!!"
+        )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No credentials provided!!!"
+        )
         raise
 
     for lb in lb_list:
@@ -199,9 +228,15 @@ def empty_tagged_s3_buckets(cfg, aws):
         cfg.get_logger().info("Getting bucket names finished successfully")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided!!!"
+        )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No credentials provided!!!"
+        )
         raise
     except Exception:
         raise
@@ -278,9 +313,15 @@ def stop_tagged_rds_clusters_and_instances(cfg, aws):
 
         except NoRegionError:
             cfg.get_logger().error("No region provided!!!")
+            Notification.post_message_to_google_chat(
+                f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided!!!"
+            )
             raise
         except NoCredentialsError:
             cfg.get_logger().error("No credentials provided!!!")
+            Notification.post_message_to_google_chat(
+                f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No credentials provided!!!"
+            )
             raise
 
         cfg.get_logger().info(f"Finished getting list of all RDS {rds_type}s")
@@ -323,6 +364,10 @@ def save_stack_parameters_to_state_bucket(cfg, aws, stack):
                               f"s3://{state_bucket_name}/{stack['stack_name']}")
     except Exception:
         cfg.get_logger().error(f"Error saving beanstalk environment_deletion_order to bucket")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"Error saving beanstalk environment_deletion_order to bucket"
+        )
         raise
 
 
@@ -341,6 +386,10 @@ def save_beanstalk_environment_deletion_order_to_state_bucket(cfg, aws, client, 
                                       f"s3://{cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())}/{environment['environment_name']}")
             except Exception:
                 cfg.get_logger().error(f"Error saving beanstalk environment_deletion_order to bucket")
+                Notification.post_message_to_google_chat(
+                    f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+                    f"Error saving beanstalk environment_deletion_order to bucket"
+                )
                 raise
 
             break
@@ -389,8 +438,7 @@ def main():
 
         cfg.get_logger().info("Region:       %s" % aws.get_region())
         cfg.get_logger().info("AccountId:    %s" % aws.get_account_id())
-        cfg.get_logger().info(
-            "State Bucket: %s" % cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
+        cfg.get_logger().info("State Bucket: %s" % cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
 
         aws.create_bucket(cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
 

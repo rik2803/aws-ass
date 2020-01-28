@@ -124,6 +124,27 @@ of business hours.
 
 The `Dockerfile` can be used to create a Docker image.
 
+To start the task from a BB pipeline, this `bitbucket-pipelines.yml` file can serve as
+an example:
+
+```shell script
+image: atlassian/pipelines-awscli
+
+pipelines:
+  custom:
+    aws_ass_start:
+      - step:
+          name: Create all deleted CloudFormation Stacks that have the tag stack_deletion_order
+          script:
+            - >
+              aws ecs run-task \
+                --task-definition task-aws-ass-start \
+                --cluster ${ECS_MGMT_CLUSTER} \
+                --network-configuration "awsvpcConfiguration={subnets=[${SUBNET}],securityGroups=[${SG}]}" \
+                --launch-type "FARGATE" \
+                --overrides "{\"containerOverrides\": [{\"name\": \"task-aws-ass-start\", \"environment\": [{\"name\": \"CHATURL\", \"value\": \"${CHATURL}\"}, {\"name\": \"ECS_MGMT_CLUSTER\", \"value\": \"${ECS_MGMT_CLUSTER}\"}]}]}"
+```
+
 ## Resource tags naming conventions and tag list
 
 To solve dependency issues and include resources in the stop/start flow, these resources can

@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
-
 class AWS:
 
     def __init__(self, logger):

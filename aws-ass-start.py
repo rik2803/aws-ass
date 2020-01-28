@@ -7,6 +7,7 @@ import os
 import time
 from ASS import Config
 from ASS import AWS
+from ASS import Notification
 
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoRegionError
@@ -83,10 +84,12 @@ def get_stack_names_and_creation_order(cfg, aws):
 
     except NoRegionError:
         cfg.get_logger().error(f"No AWS Credentials provided!!!")
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: No AWS Credentials provided!!!")
         raise
     except ClientError as e:
         cfg.get_logger().error(e.response['Error']['Code'])
         cfg.get_logger().error(e.response['Error']['Message'])
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: {e.response['Error']['Message']}")
         raise
 
     return result
@@ -108,6 +111,7 @@ def get_beanstalk_environment_deletion_order_from_state_bucket(cfg, aws, environ
         cfg.get_logger().warning(f"An error occurred retrieving stack information from the S3 state bucket")
         cfg.get_logger().warning(f"Skipping this beanstalk environment, because it's an environment")
         cfg.get_logger().warning(f"that was deleted outside the stop/start setup.")
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: error retrieving stack information from s3")
         return None
 
 
@@ -124,6 +128,7 @@ def get_deleted_beanstalk_environment_names_and_creation_order(cfg, aws):
         env_list = response['Environments']
     except NoRegionError as e:
         cfg.get_logger().error(f"No region provided!!!")
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: No AWS Region provided!!!")
         raise e
 
     for environment in env_list:
@@ -163,6 +168,7 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                 cfg.get_logger().debug(e)
                 cfg.get_logger().warning("An error occurred retrieving stack information from the S3 state bucket")
                 cfg.get_logger().warning("Continuing without restoring data from S3")
+                Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: An error occurred retrieving stack information from the S3 state bucket")
                 stack_dict['stack_parameters'] = []
 
             cfg.get_logger().info("Get template string for template %s" % stack['stack_name'])
@@ -196,9 +202,9 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                     break
                 except botocore.exceptions.WaiterError as e:
                     if counter == retries - 1:
-                        cfg.get_logger().error("Stack re-creation for %s has failed, check the CloudFormation logs." %
-                                               stack['stack_name'])
+                        cfg.get_logger().error(f"Stack re-creation for {stack['stack_name']} has failed, check the CloudFormation logs.")
                         cfg.get_logger().error(e)
+                        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: Stack re-creation for {stack['stack_name']} has failed, check the CloudFormation logs.")
                         raise
                     else:
                         cfg.get_logger().warning("Stack creation failed, retrying after deletion ...")
@@ -209,8 +215,9 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                                 .wait(StackName=stack['stack_name'])
                             cfg.get_logger().info("Deletion of stack %s was successful" % stack['stack_name'])
                         except Exception:
-                            cfg.get_logger().error("An error occurred while deleting stack %s" % stack['stack_name'])
+                            cfg.get_logger().error("An error occurred while deleting stack {stack['stack_name']}")
                             cfg.get_logger().error("No use to retry when stack already exists (in a failed state).")
+                            Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: An error occurred while deleting stack {stack['stack_name']}.")
                             raise
 
         else:
@@ -292,9 +299,11 @@ def start_tagged_rds_clusters_and_instances(cfg, aws):
 
         except NoRegionError:
             cfg.get_logger().error("No region provided!!!")
+            Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: No region provided.")
             raise
         except NoCredentialsError:
             cfg.get_logger().error("No credentials provided!!!")
+            Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: No credentials provided.")
             raise
 
         cfg.get_logger().info(f"Finished getting list of all RDS {rds_type}s")
@@ -352,6 +361,9 @@ def create_deleted_tagged_beanstalk_environments(cfg, aws):
         except Exception:
             cfg.get_logger().error(f"Async re-creation of terminated BeanStalk environment "
                                    f"{environment['environment_name']} failed")
+            Notification.post_message_to_google_chat(
+                f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: Async re-creation of terminated BeanStalk environment "
+                f"{environment['environment_name']} failed")
             raise
 
     cfg.get_logger().info(f"Creation of terminated BeanStalk environments ended")
@@ -382,6 +394,7 @@ def main():
     except Exception as e:
         cfg.get_logger().error("An exception occurred")
         cfg.get_logger().error(e)
+        Notification.post_message_to_google_chat(f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-start: An exception occured")
     finally:
         if cfg.get_template_bucket_name():
             aws.remove_bucket(cfg.get_template_bucket_name())
