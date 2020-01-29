@@ -142,7 +142,7 @@ pipelines:
                 --cluster ${ECS_MGMT_CLUSTER} \
                 --network-configuration "awsvpcConfiguration={subnets=[${SUBNET}],securityGroups=[${SG}]}" \
                 --launch-type "FARGATE" \
-                --overrides "{\"containerOverrides\": [{\"name\": \"task-aws-ass-start\", \"environment\": [{\"name\": \"CHATURL\", \"value\": \"${CHATURL}\"}, {\"name\": \"ECS_MGMT_CLUSTER\", \"value\": \"${ECS_MGMT_CLUSTER}\"}]}]}"
+                --overrides "{\"containerOverrides\": [{\"name\": \"aws-ass-start\", \"environment\": [{\"name\": \"CHATURL\", \"value\": \"${CHATURL}\"}, {\"name\": \"ECS_MGMT_CLUSTER\", \"value\": \"${ECS_MGMT_CLUSTER}\"}]}]}"
 ```
 
 ## Resource tags naming conventions and tag list
