@@ -188,6 +188,25 @@ def disable_lb_access_logs(cfg, lb_client, lb):
         raise
 
 
+def backup_tagged_buckets(cfg, aws, backup_bucket):
+    s3_resource = boto3.resource('s3', region_name=aws.get_region())
+    try:
+        cfg.get_logger().info("Start getting S3-Buckets")
+        for bucket in s3_resource.buckets.all():
+            bucket_name = bucket.name
+            cfg.get_logger().debug(f"Checking bucket {bucket_name} for backup-and-empty tags")
+            if aws.s3_has_tag(bucket_name, "ass:s3:backup-and-empty-bucket-on-stop", "yes"):
+                cfg.get_logger().info(f"Bucket {bucket_name} will be backed up")
+                aws.backup_bucket(bucket_name, backup_bucket)
+                aws.remove_bucket(bucket_name)
+    except Exception:
+        cfg.get_logger().error(f"An error occurred while taking a backup of the buckets")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: "
+            f"An error occurred while taking a backup of the buckets"
+        )
+        raise
+
 def empty_lb_access_log_buckets(cfg, aws):
     lb_client = boto3.client('elbv2', region_name=aws.get_region())
 
@@ -435,17 +454,22 @@ def main():
     try:
         cfg = Config("aws-ass-stop")
         aws = AWS(cfg.get_logger())
+        new_bucket_name = cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())
 
         cfg.get_logger().info("Region:       %s" % aws.get_region())
         cfg.get_logger().info("AccountId:    %s" % aws.get_account_id())
         cfg.get_logger().info("State Bucket: %s" % cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
 
-        aws.create_bucket(cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
-
+        aws.create_bucket(new_bucket_name)
         do_pre_deletion_tasks(cfg, aws)
         delete_tagged_cloudformation_stacks(cfg, aws)
         delete_tagged_beanstalk_environments(cfg, aws)
         stop_tagged_rds_clusters_and_instances(cfg, aws)
+
+        # S3 tagged bucket backup code
+        cfg.get_logger().info(f"Starting backup to {new_bucket_name}")
+        aws.create_bucket(cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
+        backup_tagged_buckets(cfg, aws, new_bucket_name)
 
         logging.shutdown()
     except Exception:

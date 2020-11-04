@@ -122,13 +122,26 @@ class AWS:
             self.logger.info(f"Connect to bucket {bucket_name}")
             s3 = boto3.resource('s3')
             bucket = s3.Bucket(bucket_name)
-            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
+            self.logger.info(f"Start deletion of all objects in bucket {bucket_name}")
             bucket.objects.all().delete()
-            self.logger.info(f"Start deletion of bucket {bucket}")
+            self.logger.info(f"Start deletion of bucket {bucket_name}")
             bucket.delete()
-            self.logger.info(f"Finished deletion of bucket {bucket}")
+            self.logger.info(f"Finished deletion of bucket {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while deleting bucket {bucket_name}")
             raise
 
-
+    def backup_bucket(self, origin_bucket_name, backup_bucket_name):
+        try:
+            self.logger.info(f"Connect to bucket {origin_bucket_name}")
+            s3 = boto3.client('s3')
+            s3_resource = boto3.resource('s3')
+            self.logger.info(f"Start backup of all objects in bucket {origin_bucket_name}")
+            for key in s3.list_objects(Bucket=origin_bucket_name)['Contents']:
+                file = key['Key']
+                copy_source = {'Bucket': origin_bucket_name, 'Key': file}
+                s3_resource.meta.client.copy(copy_source, backup_bucket_name, f"{origin_bucket_name}/{key['Key']}")
+            self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {backup_bucket_name}")
+        except Exception:
+            self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
+            raise
