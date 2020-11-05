@@ -18,18 +18,25 @@ class AWS:
             raise Exception("Not a valid logger object")
 
     def empty_bucket(self, bucket):
+        s3client = boto3.client('s3', region_name= self.get_region())
+        bucket_name = bucket['Name']
+        versioning_status = s3client.get_bucket_versioning(Bucket=bucket_name)
         try:
-            self.logger.info(f"Connect to bucket {bucket}")
+            self.logger.info(f"Connect to bucket {bucket_name}")
             s3 = boto3.resource('s3')
-            bucket = s3.Bucket(bucket)
-            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
+            bucket = s3.Bucket(bucket_name)
+            self.logger.info(f"Start deletion of all objects in bucket {bucket_name}")
             bucket.objects.all().delete()
-            self.logger.info(f"Finished deletion of all objects in bucket {bucket}")
+            if versioning_status['Status'] == "Enabled" or versioning_status['Status'] == "Suspended":
+                bucket.object_versions.delete()
+            self.logger.info(f"Finished deletion of all objects in bucket {bucket_name}")
+        except AttributeError:
+            self.logger.info(f"{bucket_name} is empty")
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchBucket':
-                self.logger.warning(f"Bucket ({bucket}) does not exist error when deleting objects, continuing")
+                self.logger.warning(f"Bucket ({bucket_name}) does not exist error when deleting objects, continuing")
         except Exception:
-            self.logger.error(f"Error occurred while deleting all objects in {bucket}")
+            self.logger.error(f"Error occurred while deleting all objects in {bucket_name}")
             raise
 
     def is_aws_authenticated(self):
@@ -103,16 +110,27 @@ class AWS:
         except NoCredentialsError:
             self.account_id = ""
 
-    def create_bucket(self, bucket_name):
+    def create_bucket(self, bucket_name, private_bucket=False):
         try:
             self.logger.info(f"Create bucket {bucket_name} if it does not already exist.")
             s3 = boto3.resource('s3')
+            s3_client = boto3.client('s3')
             if s3.Bucket(bucket_name) in s3.buckets.all():
                 self.logger.info(f"Bucket {bucket_name} already exists")
             else:
                 self.logger.info(f"Start creation of bucket {bucket_name}")
                 s3.create_bucket(Bucket=bucket_name,
                                  CreateBucketConfiguration={'LocationConstraint': self.get_region()})
+                if private_bucket:
+                    s3_client.put_public_access_block(
+                        Bucket=bucket_name,
+                        PublicAccessBlockConfiguration={
+                            'BlockPublicAcls': True,
+                            'IgnorePublicAcls': True,
+                            'BlockPublicPolicy': True,
+                            'RestrictPublicBuckets': True
+                        },
+                    )
                 self.logger.info(f"Finished creation of bucket {bucket_name}")
         except Exception:
             raise
