@@ -369,6 +369,41 @@ def create_deleted_tagged_beanstalk_environments(cfg, aws):
     cfg.get_logger().info(f"Creation of terminated BeanStalk environments ended")
 
 
+def restore_s3_backup(cfg, aws):
+    s3_client = aws.get_boto3_client('s3')
+
+    try:
+        cfg.get_logger().info("Start getting bucket names")
+        response = s3_client.list_buckets()
+        s3_list = response['Buckets']
+        cfg.get_logger().debug(response)
+        cfg.get_logger().debug(s3_list)
+        cfg.get_logger().info("Getting bucket names finished successfully")
+        for bucket in s3_list:
+            bucket_name = bucket['Name']
+            bucket_arn = f"arn:aws:s3:::{bucket_name}"
+            cfg.get_logger().debug(f"Checking bucket {bucket_name} ({bucket_arn})")
+            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes"):
+                cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
+                aws.restore_bucket(bucket_name)
+            elif aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
+                cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
+                aws.restore_bucket(bucket_name)
+    except NoRegionError:
+        cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No region provided!!!"
+        )
+        raise
+    except NoCredentialsError:
+        cfg.get_logger().error("No credentials provided!!!")
+        Notification.post_message_to_google_chat(
+            f"{os.getenv('ECS_MGMT_CLUSTER')}: aws-ass-stop: No credentials provided!!!"
+        )
+        raise
+    except Exception:
+        raise
+
 def get_region():
     return boto3.session.Session().region_name
 
@@ -391,6 +426,7 @@ def main():
         start_tagged_rds_clusters_and_instances(cfg, aws)
         create_deleted_tagged_cloudformation_stacks(cfg, aws)
         create_deleted_tagged_beanstalk_environments(cfg, aws)
+        restore_s3_backup(cfg, aws)
     except Exception as e:
         cfg.get_logger().error("An exception occurred")
         cfg.get_logger().error(e)

@@ -1,4 +1,5 @@
 import boto3
+import os
 from botocore.exceptions import ClientError, NoCredentialsError
 
 class AWS:
@@ -160,6 +161,34 @@ class AWS:
                 copy_source = {'Bucket': origin_bucket_name, 'Key': file}
                 s3_resource.meta.client.copy(copy_source, backup_bucket_name, f"{origin_bucket_name}/{key['Key']}")
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {backup_bucket_name}")
+        except Exception:
+            self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
+            raise
+
+    def restore_bucket(self, bucket_name):
+        try:
+            origin_bucket_name = f"aws-ass-{ self.get_account_id() }-s3-backup"
+            self.logger.info(f"Connect to bucket {origin_bucket_name}")
+            s3 = boto3.client('s3')
+            s3_resource = boto3.resource('s3')
+            self.logger.info(f"Start restore of all objects in bucket {origin_bucket_name}")
+            for key in s3.list_objects(Bucket=origin_bucket_name)['Contents']:
+                # full path (e.g. bucket/folder/test.png)
+                origin_file_key = key['Key']
+                # first folder in path (e.g. bucket)
+                path_bucket = origin_file_key
+                # file name (e.g. test.png)
+                base_name = os.path.basename(origin_file_key)
+                # path (e.g. bucket/folder/test.png)
+                file_name = "/".join(origin_file_key.strip("/").split('/')[1:])
+                while path_bucket.count('/') != 0:
+                    file_path = os.path.split(path_bucket)
+                    path_bucket = file_path[0]
+                if path_bucket == bucket_name:
+                    copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
+                    if base_name != '':
+                        s3_resource.meta.client.copy(copy_source, path_bucket, file_name)
+            self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
             raise
