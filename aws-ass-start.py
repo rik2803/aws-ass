@@ -385,7 +385,7 @@ def restore_s3_backup(cfg, aws):
             cfg.get_logger().debug(f"Checking bucket {bucket_name} ({bucket_arn})")
             if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes") or aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
                 cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
-                aws.restore_bucket(bucket_name)
+                aws.restore_bucket(cfg, bucket_name)
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
         Notification.post_message_to_google_chat(
