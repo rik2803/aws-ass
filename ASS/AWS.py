@@ -180,13 +180,21 @@ class AWS:
                     origin_file_key = obj['Key']
                     # first folder in path (e.g. bucket)
                     bucket = "/".join(origin_file_key.strip("/").split('/')[0:1])
+                    # ACL tagging
+                    acl = ""
+                    for tag in s3.get_bucket_tagging(Bucket=f"{bucket}")['TagSet']:
+                        if tag['Key'] == "ass:s3:backup-and-empty-bucket-on-stop-acl":
+                            bucket_tag = tag['Value']
+                            acl = {'ACL': f"{bucket_tag}"}
+                        else:
+                            acl = {'ACL': "private"}
                     # file name (e.g. test.png)
                     base_name = os.path.basename(origin_file_key)
                     # path (e.g. folder/test.png)
                     fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
                     if base_name != '':
                         copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
-                        s3_resource.meta.client.copy(copy_source, bucket, fn_new_bucket)
+                        s3_resource.meta.client.copy(copy_source, bucket, fn_new_bucket, acl)
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
