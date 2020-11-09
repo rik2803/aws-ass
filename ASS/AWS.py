@@ -176,18 +176,18 @@ class AWS:
                 # full path (e.g. bucket/folder/test.png)
                 origin_file_key = key['Key']
                 # first folder in path (e.g. bucket)
-                path_bucket = origin_file_key
+                bucket = origin_file_key
                 # file name (e.g. test.png)
                 base_name = os.path.basename(origin_file_key)
                 # path (e.g. bucket/folder/test.png)
-                file_name = "/".join(origin_file_key.strip("/").split('/')[1:])
-                while path_bucket.count('/') != 0:
-                    file_path = os.path.split(path_bucket)
-                    path_bucket = file_path[0]
-                if path_bucket == bucket_name:
+                fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
+                while bucket.count('/') != 0:
+                    file_path = os.path.split(bucket)
+                    bucket = file_path[0]
+                if bucket == bucket_name:
                     copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
                     if base_name != '':
-                        s3_resource.meta.client.copy(copy_source, path_bucket, file_name)
+                        s3_resource.meta.client.copy(copy_source, bucket, fn_new_bucket)
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
