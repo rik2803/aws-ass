@@ -172,21 +172,20 @@ class AWS:
             s3 = boto3.client('s3')
             s3_resource = boto3.resource('s3')
             self.logger.info(f"Start restore of all objects in bucket {origin_bucket_name}")
-            for key in s3.list_objects(Bucket=origin_bucket_name)['Contents']:
-                # full path (e.g. bucket/folder/test.png)
-                origin_file_key = key['Key']
-                # first folder in path (e.g. bucket)
-                bucket = origin_file_key
-                # file name (e.g. test.png)
-                base_name = os.path.basename(origin_file_key)
-                # path (e.g. bucket/folder/test.png)
-                fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
-                while bucket.count('/') != 0:
-                    file_path = os.path.split(bucket)
-                    bucket = file_path[0]
-                if bucket == bucket_name:
-                    copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
+            paginator = s3.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=origin_bucket_name, Prefix=f'{bucket_name}/')
+            for page in pages:
+                for obj in page['Contents']:
+                    # full path (e.g. bucket/folder/test.png)
+                    origin_file_key = obj['Key']
+                    # first folder in path (e.g. bucket)
+                    bucket = "/".join(origin_file_key.strip("/").split('/')[0:1])
+                    # file name (e.g. test.png)
+                    base_name = os.path.basename(origin_file_key)
+                    # path (e.g. folder/test.png)
+                    fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
                     if base_name != '':
+                        copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
                         s3_resource.meta.client.copy(copy_source, bucket, fn_new_bucket)
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
         except Exception:

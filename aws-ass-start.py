@@ -427,6 +427,7 @@ def main():
         create_deleted_tagged_cloudformation_stacks(cfg, aws)
         create_deleted_tagged_beanstalk_environments(cfg, aws)
         restore_s3_backup(cfg, aws)
+        aws.remove_bucket(f"aws-ass-{ aws.get_account_id() }-s3-backup")
     except Exception as e:
         cfg.get_logger().error("An exception occurred")
         cfg.get_logger().error(e)
