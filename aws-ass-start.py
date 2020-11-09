@@ -383,10 +383,7 @@ def restore_s3_backup(cfg, aws):
             bucket_name = bucket['Name']
             bucket_arn = f"arn:aws:s3:::{bucket_name}"
             cfg.get_logger().debug(f"Checking bucket {bucket_name} ({bucket_arn})")
-            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes"):
-                cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
-                aws.restore_bucket(bucket_name)
-            elif aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
+            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes") or aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
                 cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
                 aws.restore_bucket(bucket_name)
     except NoRegionError:
