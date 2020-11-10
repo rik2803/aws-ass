@@ -271,12 +271,13 @@ def empty_tagged_s3_buckets(cfg, aws):
             aws.empty_bucket(bucket)
 
 
-def do_pre_deletion_tasks(cfg, aws):
+def do_pre_deletion_tasks(cfg, aws, ass_bucket):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
         cfg.get_logger().info(f"Skipping pre deletion tasks because "
                               f"envvar ASS_SKIP_PREDELETIONTASKS is set")
         return True
-
+    aws.create_bucket(ass_bucket, True)
+    backup_tagged_buckets(cfg, aws, ass_bucket)
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
 
@@ -463,13 +464,9 @@ def main():
         cfg.get_logger().info("AccountId:    %s" % aws.get_account_id())
         cfg.get_logger().info("State Bucket: %s" % cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id()))
 
-        # S3 tagged bucket backup code
-        aws.create_bucket(ass_s3_backup, True)
-        backup_tagged_buckets(cfg, aws, ass_s3_backup)
-
         # Cloudformation stop
         aws.create_bucket(cloudformation_s3)
-        do_pre_deletion_tasks(cfg, aws)
+        do_pre_deletion_tasks(cfg, aws, ass_s3_backup)
         delete_tagged_cloudformation_stacks(cfg, aws)
         delete_tagged_beanstalk_environments(cfg, aws)
         stop_tagged_rds_clusters_and_instances(cfg, aws)

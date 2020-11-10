@@ -383,9 +383,9 @@ def restore_s3_backup(cfg, aws):
             bucket_name = bucket['Name']
             bucket_arn = f"arn:aws:s3:::{bucket_name}"
             cfg.get_logger().debug(f"Checking bucket {bucket_name} ({bucket_arn})")
-            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes") or aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
+            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
                 cfg.get_logger().info(f"Bucket {bucket_name} will be restored")
-                aws.restore_bucket( bucket_name)
+                aws.restore_bucket(bucket_name)
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
         Notification.post_message_to_google_chat(
@@ -424,7 +424,6 @@ def main():
         create_deleted_tagged_cloudformation_stacks(cfg, aws)
         create_deleted_tagged_beanstalk_environments(cfg, aws)
         restore_s3_backup(cfg, aws)
-        aws.remove_bucket(f"aws-ass-{ aws.get_account_id() }-s3-backup")
     except Exception as e:
         cfg.get_logger().error("An exception occurred")
         cfg.get_logger().error(e)

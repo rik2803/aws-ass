@@ -28,8 +28,7 @@ class AWS:
             bucket = s3.Bucket(bucket_name)
             self.logger.info(f"Start deletion of all objects in bucket {bucket_name}")
             bucket.objects.all().delete()
-            if versioning_status['Status'] == "Enabled" or versioning_status['Status'] == "Suspended":
-                bucket.object_versions.delete()
+            bucket.object_versions.delete()
             self.logger.info(f"Finished deletion of all objects in bucket {bucket_name}")
         except AttributeError:
             self.logger.info(f"{bucket_name} is empty")
@@ -156,10 +155,12 @@ class AWS:
             s3 = boto3.client('s3')
             s3_resource = boto3.resource('s3')
             self.logger.info(f"Start backup of all objects in bucket {origin_bucket_name}")
-            for key in s3.list_objects(Bucket=origin_bucket_name)['Contents']:
-                file = key['Key']
-                copy_source = {'Bucket': origin_bucket_name, 'Key': file}
-                s3_resource.meta.client.copy(copy_source, backup_bucket_name, f"{origin_bucket_name}/{key['Key']}")
+            # Get all objects
+            bucket = s3_resource.Bucket(origin_bucket_name)
+            objects = bucket.objects.all()
+            for obj in objects:
+                copy_source = {'Bucket': origin_bucket_name, 'Key': obj.key}
+                s3_resource.meta.client.copy(copy_source, backup_bucket_name, f"{origin_bucket_name}/{obj.key}")
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {backup_bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
@@ -171,30 +172,30 @@ class AWS:
             self.logger.info(f"Connect to bucket {origin_bucket_name}")
             s3 = boto3.client('s3')
             s3_resource = boto3.resource('s3')
+
+            # Get ACL tag
+            self.logger.info(f"Getting ACL from bucket: {bucket_name}")
+            acl = ""
+            for tag in s3.get_bucket_tagging(Bucket=f"{bucket_name}")['TagSet']:
+                if tag['Key'] == "ass:s3:backup-and-empty-bucket-on-stop-acl":
+                    bucket_tag = tag['Value']
+                    acl = {'ACL': f"{bucket_tag}"}
+                else:
+                    acl = {'ACL': "private"}
+
+            # Starting restore
             self.logger.info(f"Start restore of all objects in bucket {origin_bucket_name}")
-            paginator = s3.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=origin_bucket_name, Prefix=f'{bucket_name}/')
-            for page in pages:
-                for obj in page['Contents']:
-                    # full path (e.g. bucket/folder/test.png)
-                    origin_file_key = obj['Key']
-                    # first folder in path (e.g. bucket)
-                    bucket = "/".join(origin_file_key.strip("/").split('/')[0:1])
-                    # ACL tagging
-                    acl = ""
-                    for tag in s3.get_bucket_tagging(Bucket=f"{bucket}")['TagSet']:
-                        if tag['Key'] == "ass:s3:backup-and-empty-bucket-on-stop-acl":
-                            bucket_tag = tag['Value']
-                            acl = {'ACL': f"{bucket_tag}"}
-                        else:
-                            acl = {'ACL': "private"}
-                    # file name (e.g. test.png)
-                    base_name = os.path.basename(origin_file_key)
-                    # path (e.g. folder/test.png)
-                    fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
-                    if base_name != '':
-                        copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
-                        s3_resource.meta.client.copy(copy_source, bucket, fn_new_bucket, acl)
+            bucket = s3_resource.Bucket(origin_bucket_name)
+            objects = bucket.objects.all()
+            for obj in objects:
+                # full path (e.g. bucket/folder/test.png)
+                origin_file_key = obj.key
+                # path (e.g. folder/test.png)
+                fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
+                if not origin_file_key.endswith("/"):
+                    copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
+                    s3_resource.meta.client.copy(copy_source, bucket_name, fn_new_bucket, acl)
+                    s3.delete_object(Bucket=origin_bucket_name, Key=origin_file_key)
             self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
