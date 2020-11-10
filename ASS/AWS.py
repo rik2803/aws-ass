@@ -1,4 +1,5 @@
 import boto3
+import os
 from botocore.exceptions import ClientError, NoCredentialsError
 
 class AWS:
@@ -18,18 +19,24 @@ class AWS:
             raise Exception("Not a valid logger object")
 
     def empty_bucket(self, bucket):
+        s3client = boto3.client('s3', region_name= self.get_region())
+        bucket_name = bucket['Name']
+        versioning_status = s3client.get_bucket_versioning(Bucket=bucket_name)
         try:
-            self.logger.info(f"Connect to bucket {bucket}")
+            self.logger.info(f"Connect to bucket {bucket_name}")
             s3 = boto3.resource('s3')
-            bucket = s3.Bucket(bucket)
-            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
+            bucket = s3.Bucket(bucket_name)
+            self.logger.info(f"Start deletion of all objects in bucket {bucket_name}")
             bucket.objects.all().delete()
-            self.logger.info(f"Finished deletion of all objects in bucket {bucket}")
+            bucket.object_versions.delete()
+            self.logger.info(f"Finished deletion of all objects in bucket {bucket_name}")
+        except AttributeError:
+            self.logger.info(f"{bucket_name} is empty")
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchBucket':
-                self.logger.warning(f"Bucket ({bucket}) does not exist error when deleting objects, continuing")
+                self.logger.warning(f"Bucket ({bucket_name}) does not exist error when deleting objects, continuing")
         except Exception:
-            self.logger.error(f"Error occurred while deleting all objects in {bucket}")
+            self.logger.error(f"Error occurred while deleting all objects in {bucket_name}")
             raise
 
     def is_aws_authenticated(self):
@@ -103,16 +110,27 @@ class AWS:
         except NoCredentialsError:
             self.account_id = ""
 
-    def create_bucket(self, bucket_name):
+    def create_bucket(self, bucket_name, private_bucket=False):
         try:
             self.logger.info(f"Create bucket {bucket_name} if it does not already exist.")
             s3 = boto3.resource('s3')
+            s3_client = boto3.client('s3')
             if s3.Bucket(bucket_name) in s3.buckets.all():
                 self.logger.info(f"Bucket {bucket_name} already exists")
             else:
                 self.logger.info(f"Start creation of bucket {bucket_name}")
                 s3.create_bucket(Bucket=bucket_name,
                                  CreateBucketConfiguration={'LocationConstraint': self.get_region()})
+                if private_bucket:
+                    s3_client.put_public_access_block(
+                        Bucket=bucket_name,
+                        PublicAccessBlockConfiguration={
+                            'BlockPublicAcls': True,
+                            'IgnorePublicAcls': True,
+                            'BlockPublicPolicy': True,
+                            'RestrictPublicBuckets': True
+                        },
+                    )
                 self.logger.info(f"Finished creation of bucket {bucket_name}")
         except Exception:
             raise
@@ -122,13 +140,63 @@ class AWS:
             self.logger.info(f"Connect to bucket {bucket_name}")
             s3 = boto3.resource('s3')
             bucket = s3.Bucket(bucket_name)
-            self.logger.info(f"Start deletion of all objects in bucket {bucket}")
+            self.logger.info(f"Start deletion of all objects in bucket {bucket_name}")
             bucket.objects.all().delete()
-            self.logger.info(f"Start deletion of bucket {bucket}")
+            self.logger.info(f"Start deletion of bucket {bucket_name}")
             bucket.delete()
-            self.logger.info(f"Finished deletion of bucket {bucket}")
+            self.logger.info(f"Finished deletion of bucket {bucket_name}")
         except Exception:
             self.logger.error(f"An error occurred while deleting bucket {bucket_name}")
             raise
 
+    def backup_bucket(self, origin_bucket_name, backup_bucket_name):
+        try:
+            self.logger.info(f"Connect to bucket {origin_bucket_name}")
+            s3 = boto3.client('s3')
+            s3_resource = boto3.resource('s3')
+            self.logger.info(f"Start backup of all objects in bucket {origin_bucket_name}")
+            # Get all objects
+            bucket = s3_resource.Bucket(origin_bucket_name)
+            objects = bucket.objects.all()
+            for obj in objects:
+                copy_source = {'Bucket': origin_bucket_name, 'Key': obj.key}
+                s3_resource.meta.client.copy(copy_source, backup_bucket_name, f"{origin_bucket_name}/{obj.key}")
+            self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {backup_bucket_name}")
+        except Exception:
+            self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
+            raise
 
+    def restore_bucket(self, bucket_name):
+        try:
+            origin_bucket_name = f"aws-ass-{ self.get_account_id() }-s3-backup"
+            self.logger.info(f"Connect to bucket {origin_bucket_name}")
+            s3 = boto3.client('s3')
+            s3_resource = boto3.resource('s3')
+
+            # Get ACL tag
+            self.logger.info(f"Getting ACL from bucket: {bucket_name}")
+            acl = ""
+            for tag in s3.get_bucket_tagging(Bucket=f"{bucket_name}")['TagSet']:
+                if tag['Key'] == "ass:s3:backup-and-empty-bucket-on-stop-acl":
+                    bucket_tag = tag['Value']
+                    acl = {'ACL': f"{bucket_tag}"}
+                else:
+                    acl = {'ACL': "private"}
+
+            # Starting restore
+            self.logger.info(f"Start restore of all objects in bucket {origin_bucket_name}")
+            bucket = s3_resource.Bucket(origin_bucket_name)
+            objects = bucket.objects.all()
+            for obj in objects:
+                # full path (e.g. bucket/folder/test.png)
+                origin_file_key = obj.key
+                # path (e.g. folder/test.png)
+                fn_new_bucket = "/".join(origin_file_key.strip("/").split('/')[1:])
+                if not origin_file_key.endswith("/"):
+                    copy_source = {'Bucket': origin_bucket_name, 'Key': origin_file_key}
+                    s3_resource.meta.client.copy(copy_source, bucket_name, fn_new_bucket, acl)
+                    s3.delete_object(Bucket=origin_bucket_name, Key=origin_file_key)
+            self.logger.info(f"Finished backup of bucket {origin_bucket_name} to {bucket_name}")
+        except Exception:
+            self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
+            raise
