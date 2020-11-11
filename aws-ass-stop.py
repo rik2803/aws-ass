@@ -188,16 +188,19 @@ def disable_lb_access_logs(cfg, lb_client, lb):
         raise
 
 
-def backup_tagged_buckets(cfg, aws, backup_bucket):
+def backup_tagged_buckets(cfg, aws):
+    backup_bucket_name = cfg.get_backup_bucket_name(aws.get_region(), aws.get_account_id())
+    aws.create_bucket(backup_bucket_name, True)
+
     s3_resource = boto3.resource('s3', region_name=aws.get_region())
     try:
         cfg.get_logger().info("Start getting S3-Buckets")
         for bucket in s3_resource.buckets.all():
             bucket_name = bucket.name
             cfg.get_logger().debug(f"Checking bucket {bucket_name} for backup-and-empty tags")
-            if aws.s3_has_tag(bucket_name, "ass:s3:backup-and-empty-bucket-on-stop", "yes"):
+            if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
                 cfg.get_logger().info(f"Bucket {bucket_name} will be backed up")
-                aws.backup_bucket(bucket_name, backup_bucket)
+                aws.backup_bucket(bucket_name, backup_bucket_name)
     except Exception:
         cfg.get_logger().error(f"An error occurred while taking a backup of the buckets")
         Notification.post_message_to_google_chat(
@@ -263,20 +266,16 @@ def empty_tagged_s3_buckets(cfg, aws):
         bucket_name = bucket['Name']
         bucket_arn = f"arn:aws:s3:::{bucket_name}"
         cfg.get_logger().debug(f"Checking bucket {bucket_name} ({bucket_arn})")
-        if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes"):
-            cfg.get_logger().info(f"Bucket {bucket_name} will be cleaned")
-            aws.empty_bucket(bucket)
-        elif aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
+        if (aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:clean-bucket-on-stop"), "yes") or
+            aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes")):
             cfg.get_logger().info(f"Bucket {bucket_name} will be cleaned")
             aws.empty_bucket(bucket)
 
-
-def do_pre_deletion_tasks(cfg, aws, ass_bucket):
+def do_pre_deletion_tasks(cfg, aws):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
         cfg.get_logger().info(f"Skipping pre deletion tasks because "
                               f"envvar ASS_SKIP_PREDELETIONTASKS is set")
         return True
-    aws.create_bucket(ass_bucket, True)
     backup_tagged_buckets(cfg, aws, ass_bucket)
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
@@ -458,7 +457,6 @@ def main():
         cfg = Config("aws-ass-stop")
         aws = AWS(cfg.get_logger())
         cloudformation_s3 = cfg.get_state_bucket_name(aws.get_region(), aws.get_account_id())
-        ass_s3_backup = f"aws-ass-{ aws.get_account_id() }-s3-backup"
 
         cfg.get_logger().info("Region:       %s" % aws.get_region())
         cfg.get_logger().info("AccountId:    %s" % aws.get_account_id())
@@ -466,7 +464,7 @@ def main():
 
         # Cloudformation stop
         aws.create_bucket(cloudformation_s3)
-        do_pre_deletion_tasks(cfg, aws, ass_s3_backup)
+        do_pre_deletion_tasks(cfg, aws)
         delete_tagged_cloudformation_stacks(cfg, aws)
         delete_tagged_beanstalk_environments(cfg, aws)
         stop_tagged_rds_clusters_and_instances(cfg, aws)

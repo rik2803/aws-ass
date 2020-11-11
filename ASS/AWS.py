@@ -166,9 +166,8 @@ class AWS:
             self.logger.error(f"An error occurred while taking a backup of bucket {origin_bucket_name}")
             raise
 
-    def restore_bucket(self, bucket_name):
+    def restore_bucket(self, bucket_name, origin_bucket_name):
         try:
-            origin_bucket_name = f"aws-ass-{ self.get_account_id() }-s3-backup"
             self.logger.info(f"Connect to bucket {origin_bucket_name}")
             s3 = boto3.client('s3')
             s3_resource = boto3.resource('s3')

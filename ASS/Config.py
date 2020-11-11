@@ -22,6 +22,10 @@ class Config:
     def get_state_bucket_name(region, account_id):
         return f"{region}-{account_id}-stop-start-state-bucket"
 
+    @staticmethod
+    def get_backup_bucket_name(region, account_id):
+        return f"{region}-{account_id}-bucket-backup"
+
     def get_template_bucket_name(self):
         if self.template_bucket_name is None:
             random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
