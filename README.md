@@ -176,7 +176,7 @@ These tags can be prefixed as described above.
 * `ass:s3:backup-and-empty-bucket-on-stop`: if this tag is present on a bucket, the bucket will 
   be backed up and emptied on stop, and restored on start
 * `ass:s3:backup-and-enpty-bucket-on-stop-acl`: when restoring, use the ACL specified by this tag 
-  (if tag does not exist, `default to private)`
+  (if tag does not exist, `default to private`)
   
 
 ## Skipping actions by setting environment variables
