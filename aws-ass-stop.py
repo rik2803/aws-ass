@@ -276,12 +276,13 @@ def empty_tagged_s3_buckets(cfg, aws):
             cfg.get_logger().info(f"Bucket {bucket_name} will be cleaned")
             aws.empty_bucket(bucket)
 
+
 def do_pre_deletion_tasks(cfg, aws):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
         cfg.get_logger().info(f"Skipping pre deletion tasks because "
                               f"envvar ASS_SKIP_PREDELETIONTASKS is set")
         return True
-    backup_tagged_buckets(cfg, aws, ass_bucket)
+    backup_tagged_buckets(cfg, aws)
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
 
