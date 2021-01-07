@@ -173,6 +173,11 @@ These tags can be prefixed as described above.
   the RDS status is `available` before continuing. This can be useful when a DB client can not
   recover when the data source is not available. The legacy tag `start_wait_until_available` is
   still supported for backward compatibility.
+* `ass:s3:backup-and-empty-bucket-on-stop`: if this tag is present on a bucket, the bucket will 
+  be backed up and emptied on stop, and restored on start
+* `ass:s3:backup-and-empty-bucket-on-stop-acl`: when restoring, use the ACL specified by this tag 
+  (if tag does not exist, `default to private`)
+  
 
 ## Skipping actions by setting environment variables
 
