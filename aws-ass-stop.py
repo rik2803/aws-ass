@@ -276,14 +276,48 @@ def empty_tagged_s3_buckets(cfg, aws):
             cfg.get_logger().info(f"Bucket {bucket_name} will be cleaned")
             aws.empty_bucket(bucket)
 
+
+def empty_cloudfront_access_log_buckets(cfg, aws):
+    s3_client = boto3.client('s3', region_name=aws.get_region())
+    cloudfront_client = boto3.client('cloudfront', region_name=aws.get_region())
+
+    try:
+        cfg.get_logger().info("Looking for Cloudfront S3 Bucket")
+        cf_distib = cloudfront_client.list_distributions()['DistributionList']['Items']
+
+        for distro in cf_distib:
+            distro_info = cloudfront_client.get_distribution(Id=distro['Id'])
+            distro_info = distro_info['Distribution']['DistributionConfig']['Logging']['Bucket']
+            distro_info = str(distro_info)
+            if ".s3.amazonaws.com" in distro_info:
+                bucket = s3_client.list_objects_v2(Bucket=distro_info[:-17])
+                cfg.get_logger().info(f"Found the Bucket {bucket}")
+                if len(bucket['Contents']) > 0:
+                    aws.empty_bucket(bucket)
+
+    except NoRegionError:
+        cfg.get_logger().error("No region provided!!!")
+        Notification.post_message_to_google_chat(
+            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+        )
+        raise
+    except NoCredentialsError:
+        cfg.get_logger().error("No credentials provided!!!")
+        Notification.post_message_to_google_chat(
+            f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+        )
+        raise
+
 def do_pre_deletion_tasks(cfg, aws):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
         cfg.get_logger().info(f"Skipping pre deletion tasks because "
                               f"envvar ASS_SKIP_PREDELETIONTASKS is set")
         return True
-    backup_tagged_buckets(cfg, aws, ass_bucket)
+    empty_cloudfront_access_log_buckets()
+    backup_tagged_buckets(cfg, aws)
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
+
 
     return True
 
