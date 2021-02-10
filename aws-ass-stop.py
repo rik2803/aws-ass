@@ -282,19 +282,50 @@ def empty_cloudfront_access_log_buckets(cfg, aws):
     cloudfront_client = boto3.client('cloudfront', region_name=aws.get_region())
 
     try:
-        cfg.get_logger().info("Looking for Cloudfront S3 Bucket")
-        cf_distib = cloudfront_client.list_distributions()['DistributionList']['Items']
+        if 'Items' in cloudfront_client.list_distributions()['DistributionList']:
+            cfg.get_logger().info("Cloudfront distribution found")
+            cf_distibution_items = cloudfront_client.list_distributions()['DistributionList']['Items']
 
-        for distro in cf_distib:
-            distro_info = cloudfront_client.get_distribution(Id=distro['Id'])
-            distro_info = distro_info['Distribution']['DistributionConfig']['Logging']['Bucket']
-            distro_info = str(distro_info)
-            if ".s3.amazonaws.com" in distro_info:
-                bucket = s3_client.list_objects_v2(Bucket=distro_info[:-17])
-                cfg.get_logger().info(f"Found the Bucket {bucket}")
-                if len(bucket['Contents']) > 0:
-                    aws.empty_bucket(bucket)
+            for distro in cf_distibution_items:
+                cfg.get_logger().info('Checking Cloudfront distribution for "stack_deletion_order" tag')
+                # Checking for stack_deletion_order tag 40
+                distro_arn = distro['ARN']
+                distro_tags = cloudfront_client.list_tags_for_resource(Resource=distro_arn)
+                for tag in distro_tags['Tags']['Items']:
+                    if (tag['Key'] == 'stack_deletion_order' or tag['Key'] == cfg.full_ass_tag('ass:cfn:deletion-order')) and int(tag['Value']) > 0:
+                        # Distro Id
+                        distrib_id = distro['Id']
+                        distrib_info = cloudfront_client.get_distribution(Id=distrib_id)
+                        # Distro etag (required for updating cloudfront distro)
+                        distrib_etag = distrib_info['ResponseMetadata']['HTTPHeaders']['etag']
+                        distrib_config = distrib_info['Distribution']['DistributionConfig']
+                        # Getting the bucket name
+                        cfg.get_logger().info("Looking for Cloudfront S3 Bucket")
+                        distrib_log_bucket = distrib_info['Distribution']['DistributionConfig']['Logging']['Bucket']
+                        distrib_log_bucket = str(distrib_log_bucket)
 
+                        if ".s3.amazonaws.com" in distrib_log_bucket:
+                            bucket = s3_client.list_objects_v2(Bucket=distrib_log_bucket[:-17])
+                            cfg.get_logger().info(f"Found the Bucket {bucket['Name']}")
+
+                            if distrib_config['Logging']['Enabled'] is True:
+                                cfg.get_logger().info(f"Disable Cloudfront logging ID: {distrib_id}")
+                                distrib_config['Logging']['Enabled'] = False
+                                response = cloudfront_client.update_distribution(Id=distrib_id,
+                                                                                 DistributionConfig=distrib_config,
+                                                                                 IfMatch=distrib_etag)
+                                if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                                    if 'Contents' in bucket:
+                                        aws.empty_bucket(bucket)
+                                    else:
+                                        cfg.get_logger().info(f"Bucket already empty: {bucket['Name']}")
+                                else:
+                                    cfg.get_logger().warning(f"Error during disabling cloudfront logging ID: {distrib_id}")
+                        else:
+                            cfg.get_logger().info(f"Cloudfront logging disabled ID: {distrib_id}")
+                            cfg.get_logger().info("No Cloudfront logging bucket found!")
+        else:
+            cfg.get_logger().info("No Cloudfront distribution")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
         Notification.post_message_to_google_chat(
@@ -308,12 +339,16 @@ def empty_cloudfront_access_log_buckets(cfg, aws):
         )
         raise
 
+    except cloudfront_client.exceptions.IllegalUpdate:
+        cfg.get_logger().error("Error during cloudfront update!!!")
+        raise
+
 def do_pre_deletion_tasks(cfg, aws):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
         cfg.get_logger().info(f"Skipping pre deletion tasks because "
                               f"envvar ASS_SKIP_PREDELETIONTASKS is set")
         return True
-    empty_cloudfront_access_log_buckets()
+    empty_cloudfront_access_log_buckets(cfg, aws)
     backup_tagged_buckets(cfg, aws)
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
