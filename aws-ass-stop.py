@@ -288,7 +288,7 @@ def empty_cloudfront_access_log_buckets(cfg, aws):
 
             for distro in cf_distibution_items:
                 cfg.get_logger().info('Checking Cloudfront distribution for "stack_deletion_order" tag')
-                # Checking for stack_deletion_order tag > 0
+                # Checking for stack_deletion_order tag 40
                 distro_arn = distro['ARN']
                 distro_tags = cloudfront_client.list_tags_for_resource(Resource=distro_arn)
                 for tag in distro_tags['Tags']['Items']:
