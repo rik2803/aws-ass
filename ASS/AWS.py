@@ -74,21 +74,36 @@ class AWS:
         """
         self.logger.debug(f"Checking resource {resource_arn} for tag {tag_name} with value {tag_value}")
         try:
-            response = client.list_tags_for_resource(ResourceName=resource_arn)
-            self.logger.debug(response['TagList'])
-            for tag in response['TagList']:
+            response = ""
+            tags = ""
+            tagitems = None
+            # Checking for type of client
+            if "RDS" in str(client.__class__):
+                self.logger.debug(f"RDS Client detected")
+                response = client.list_tags_for_resource(ResourceName=resource_arn)
+                tags = 'TagList'
+            elif "CloudFront" in str(client.__class__):
+                self.logger.debug(f"Cloudfront Client detected")
+                response = client.list_tags_for_resource(Resource=resource_arn)
+                tags = 'Tags'
+                tagitems = 'Items'
+            else:
+                self.logger.debug(f"Unknown client detected!")
+
+            self.logger.debug(response[tags][tagitems])
+            for tag in response[tags][tagitems]:
                 if tag['Key'] == tag_name:
                     if tag_value is not None:
                         if tag['Value'] == tag_value:
-                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['value']}")
+                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['Value']}")
                             return True
                         else:
-                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} but value {tag['value']} "
+                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} but value {tag['Value']} "
                                               f"does not match {tag_value}")
                             return False
                     else:
-                        self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['value']}")
-                        return tag[Value]
+                        self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['Value']}")
+                        return int(tag['Value'])
         except Exception:
             return False
 
