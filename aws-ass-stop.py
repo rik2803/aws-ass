@@ -287,8 +287,8 @@ def empty_cloudfront_access_log_buckets(cfg, aws):
             cf_distibution_items = cloudfront_client.list_distributions()['DistributionList']['Items']
 
             for distro in cf_distibution_items:
-                if ( AWS.resource_has_tag(cloudfront_client, distro['ARN'], 'stack_deletion_order') > 0 or
-                     AWS.resource_has_tag(cloudfront_client, distro['ARN'], cfg.full_ass_tag('ass:cfn:deletion-order')) > 0):
+                if (aws.resource_has_tag(cloudfront_client, distro['ARN'], 'stack_deletion_order') > 0 or
+                        aws.resource_has_tag(cloudfront_client, distro['ARN'], cfg.full_ass_tag('ass:cfn:deletion-order')) > 0):
                     # Distro Id
                     distrib_id = distro['Id']
                     distrib_info = cloudfront_client.get_distribution(Id=distrib_id)
