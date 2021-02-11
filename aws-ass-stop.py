@@ -353,7 +353,6 @@ def do_pre_deletion_tasks(cfg, aws):
     empty_lb_access_log_buckets(cfg, aws)
     empty_tagged_s3_buckets(cfg, aws)
 
-
     return True
 
 

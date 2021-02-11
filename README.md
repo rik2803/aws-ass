@@ -15,7 +15,6 @@ docker tag tryxcom/aws-ass-stop tryxcom/aws-ass-stop:latest
 docker push tryxcom/aws-ass-stop:latest
 ```
 
-
 ### Build the `tryxcom/aws-ass-start` image
 
 ```bash
