@@ -26,8 +26,9 @@ def get_stack_names_and_deletion_order(cfg, aws, client):
         stack_list = response['Stacks']
     except NoRegionError as e:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided."
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided."
         )
         raise e
 
@@ -62,8 +63,9 @@ def get_beanstalk_env_names_and_deletion_order(cfg, aws, client):
         env_list = response['Environments']
     except NoRegionError as e:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided."
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided."
         )
         raise e
 
@@ -93,8 +95,8 @@ def delete_stack(cfg, client, stack, aws):
         cfg.get_logger().error(
             f"Stack deletion for {stack['stack_name']} has failed, check the CloudFormation logs.")
         cfg.get_logger().error(e)
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
             f"Stack deletion for {stack['stack_name']} has failed, check the CloudFormation logs."
         )
         raise
@@ -113,8 +115,8 @@ def terminate_beanstalk_environment(cfg, aws, client, environment):
         cfg.get_logger().error(
             f"Environment deletion for {environment['environment_name']} has failed, check the logs.")
         cfg.get_logger().error(e)
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
             f"Stack deletion for {environment['environment_name']} has failed, check the CloudFormation logs."
         )
         raise
@@ -143,8 +145,8 @@ def get_lb_access_log_bucket(cfg, lb_client, lb, aws):
             return ''
     except Exception:
         cfg.get_logger().error("An error occurred while determining the loadbalancer access log bucket name")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
             f"An error occurred while determining the loadbalancer access log bucket name"
         )
         raise
@@ -164,8 +166,8 @@ def empty_bucket(cfg, bucket, aws):
     except Exception as e:
         cfg.get_logger().error(f"Error occurred while deleting all objects in {bucket}")
         cfg.get_logger().debug(e)
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop: ",
             f"Error occurred while deleting all objects in {bucket}"
         )
         raise
@@ -186,8 +188,8 @@ def disable_lb_access_logs(cfg, lb_client, lb, aws):
         cfg.get_logger().info(f"Access logs for loadbalancer {lb} successfully disabled")
     except Exception:
         cfg.get_logger().error(f"An error occurred while disabling the loadbalancer access logs")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
             f"An error occurred while disabling the loadbalancer access logs"
         )
         raise
@@ -206,11 +208,12 @@ def backup_tagged_buckets(cfg, aws):
             if aws.s3_has_tag(bucket_name, cfg.full_ass_tag("ass:s3:backup-and-empty-bucket-on-stop"), "yes"):
                 cfg.get_logger().info(f"Bucket {bucket_name} will be backed up")
                 aws.backup_bucket(bucket_name, backup_bucket_name)
-    except Exception:
+    except Exception as e:
         cfg.get_logger().error(f"An error occurred while taking a backup of the buckets")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
             f"An error occurred while taking a backup of the buckets"
+            f"Details: \n Account-id: {aws.get_account_id()} \n Traceback: \n{e}"
         )
         raise
 
@@ -225,14 +228,16 @@ def empty_lb_access_log_buckets(cfg, aws):
         cfg.get_logger().info("Getting LB ARNs finished successfully")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided!!!"
         )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()}: aws-ass-stop:",
+            f"No credentials provided!!!"
         )
         raise
 
@@ -254,17 +259,25 @@ def empty_tagged_s3_buckets(cfg, aws):
         cfg.get_logger().info("Getting bucket names finished successfully")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided!!!"
         )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No credentials provided!!!"
         )
         raise
-    except Exception:
+    except Exception as e:
+        cfg.get_logger().error("Empty_tagged_s3_buckets error!!!")
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"An error occurred while deleting content of the S3 buckets"
+            f"Details: \n Account-id: {aws.get_account_id()} \n Traceback: \n{e}"
+        )
         raise
 
     for bucket in s3_list:
@@ -328,20 +341,26 @@ def empty_cloudfront_access_log_buckets(cfg, aws):
             cfg.get_logger().info("No Cloudfront distribution")
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided!!!"
         )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No credentials provided!!!"
+        )
+        raise
+    except cloudfront_client.exceptions.IllegalUpdate:
+        cfg.get_logger().error("Error during cloudfront update!!!")
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"Illegal Update while disabling Cloudfront logging!!!"
         )
         raise
 
-    except cloudfront_client.exceptions.IllegalUpdate:
-        cfg.get_logger().error("Error during cloudfront update!!!")
-        raise
 
 def do_pre_deletion_tasks(cfg, aws):
     if os.getenv('ASS_SKIP_PREDELETIONTASKS', '0') == '1':
@@ -407,14 +426,16 @@ def stop_tagged_rds_clusters_and_instances(cfg, aws):
 
         except NoRegionError:
             cfg.get_logger().error("No region provided!!!")
-            Notification.post_message_to_google_chat(
-                f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+            Notification.send_notification(
+                f"Account ID {aws.get_account_id()} aws-ass-stop:",
+                f"No region provided!!!"
             )
             raise
         except NoCredentialsError:
             cfg.get_logger().error("No credentials provided!!!")
-            Notification.post_message_to_google_chat(
-                f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+            Notification.send_notification(
+                f"Account ID {aws.get_account_id()} aws-ass-stop:",
+                f"No credentials provided!!!"
             )
             raise
 
@@ -460,8 +481,8 @@ def save_stack_parameters_to_state_bucket(cfg, aws, stack):
                               f"s3://{state_bucket_name}/{stack['stack_name']}")
     except Exception:
         cfg.get_logger().error(f"Error saving beanstalk environment_deletion_order to bucket")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop: ",
             f"Error saving beanstalk environment_deletion_order to bucket"
         )
         raise
@@ -486,8 +507,8 @@ def save_beanstalk_environment_deletion_order_to_state_bucket(cfg, aws, client, 
                 )
             except Exception:
                 cfg.get_logger().error(f"Error saving beanstalk environment_deletion_order to bucket")
-                Notification.post_message_to_google_chat(
-                    f"Account ID {aws.get_account_id()}: aws-ass-stop: "
+                Notification.send_notification(
+                    f"Account ID {aws.get_account_id()} aws-ass-stop:",
                     f"Error saving beanstalk environment_deletion_order to bucket"
                 )
                 raise
