@@ -9,8 +9,28 @@ class AWS:
         self.set_logger(logger)
         self._set_account_id()
         self._set_region()
+        self.check_notification_variables()
         self.boto3_client_map = dict()
         pass
+
+    def check_notification_variables(self):
+        checkvars = {'JIRA_USER', 'JIRA_API_PASSWORD', 'JIRA_URL'}
+        for jiraenv in checkvars:
+            if jiraenv not in os.environ:
+                warning = "One of the Jira variables JIRA_USER, JIRA_API_PASSWORD & JIRA_URL is not setup correctly!!!"
+                self.logger.warning(warning)
+                raise Exception(warning)
+        self.logger.info('Jira variables available')
+        if 'CHATURL' not in os.environ:
+            warning = "Google char url variable CHATURL is not setup correctly!!!"
+            self.logger.warning(warning)
+            raise Exception(warning)
+        self.logger.info(f'Google chat variable available.')
+        if 'NOTIFICATION_MODE' not in os.environ:
+            self.logger.warning("NOTIFICATION_MODE variable is not set!!!")
+            self.logger.warning("NOTIFICATION_MODE is set to NONE!!!")
+            os.environ["NOTIFICATION_MODE"] = "NONE"
+        self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
 
     def set_logger(self, logger):
         if logger.__module__ and logger.__module__ == 'logging':
