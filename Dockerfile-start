@@ -1,11 +1,5 @@
 FROM python:3.7-alpine3.7
 
-ENV JIRA_USER = "None"
-ENV JIRA_API_PASSWORD = "None"
-ENV JIRA_URL = "None"
-ENV CHATURL = "None"
-ENV NOTIFICATION_MODE = "None"
-
 ADD requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 ADD aws-ass-start.py /aws-ass-start.py
