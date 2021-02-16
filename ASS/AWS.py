@@ -9,9 +9,24 @@ class AWS:
         self.set_logger(logger)
         self._set_account_id()
         self._set_region()
+        self.get_notification_variables()
         self.check_notification_variables()
         self.boto3_client_map = dict()
         pass
+
+    def get_notification_variables(self):
+        ssm_client = boto3.client('ssm', region_name=self.get_region())
+
+        response = ssm_client.get_parameters(
+            Names=['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL',
+                   'ASS_AWS_NOTIFICATION_MODE', 'ASS_AWS_CHATURL'], WithDecryption=True)
+
+        for parameters in response['Parameters']:
+            key = parameters['Name']
+            value = parameters['Value']
+            os.environ[key[8:]] = str(value)
+
+        self.logger.info(f"Parameters set from SSM Parameter store")
 
     def check_notification_variables(self):
 
@@ -20,15 +35,16 @@ class AWS:
             os.environ["NOTIFICATION_MODE"] = "NONE"
             self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
         elif os.environ['NOTIFICATION_MODE'] == "JIRA":
-            checkvars = {'JIRA_USER', 'JIRA_API_PASSWORD', 'JIRA_URL'}
+            checkvars = {"JIRA_USER", "JIRA_API_PASSWORD", "JIRA_URL"}
             for jiraenv in checkvars:
-                if os.environ[jiraenv] == "None":
-                    warning = "One of the Jira variables JIRA_USER, JIRA_API_PASSWORD & JIRA_URL is not setup correctly!!!"
+                if jiraenv not in os.environ:
+                    warning = "One of the Jira variables JIRA_USER, JIRA_API_PASSWORD " \
+                              "& JIRA_URL is not setup correctly!!!"
                     self.logger.warning(warning)
                     raise Exception(warning)
             self.logger.info('Jira variables available')
         elif os.environ['NOTIFICATION_MODE'] == "GOOGLECHAT":
-            if os.environ['CHATURL'] == "None":
+            if 'CHATURL' not in os.environ:
                 warning = "Google char url variable CHATURL is not setup correctly!!!"
                 self.logger.warning(warning)
                 raise Exception(warning)
