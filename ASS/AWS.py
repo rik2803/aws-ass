@@ -17,13 +17,13 @@ class AWS:
         # Get ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
         self.set_list_ssmparameters(['ASS_AWS_NOTIFICATION_MODE'])
         # Get variables depending on the ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
-        if os.environ['NOTIFICATION_MODE'] == "NONE":
+        if os.environ['NOTIFICATION_MODE'].upper() == "NONE":
             self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
-        elif os.environ['NOTIFICATION_MODE'] == "JIRA":
+        elif os.environ['NOTIFICATION_MODE'].upper() == "JIRA":
             self.logger.info('Getting Jira variables from Parameter store')
             self.set_list_ssmparameters(['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL'])
             self.logger.info('Jira variables available')
-        elif os.environ['NOTIFICATION_MODE'] == "GOOGLECHAT":
+        elif os.environ['NOTIFICATION_MODE'].upper() == "GOOGLECHAT":
             self.logger.info('Getting Google Chat variable from Parameter store')
             self.set_list_ssmparameters(['ASS_AWS_CHATURL'])
             self.logger.info(f'Google chat variable available.')
