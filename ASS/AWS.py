@@ -10,49 +10,43 @@ class AWS:
         self._set_account_id()
         self._set_region()
         self.get_notification_variables()
-        self.check_notification_variables()
         self.boto3_client_map = dict()
         pass
 
     def get_notification_variables(self):
-        ssm_client = boto3.client('ssm', region_name=self.get_region())
-
-        response = ssm_client.get_parameters(
-            Names=['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL',
-                   'ASS_AWS_NOTIFICATION_MODE', 'ASS_AWS_CHATURL'], WithDecryption=True)
-
-        for parameters in response['Parameters']:
-            key = parameters['Name']
-            value = parameters['Value']
-            os.environ[key[8:]] = str(value)
-
-        self.logger.info(f"Parameters set from SSM Parameter store")
-
-    def check_notification_variables(self):
-
+        # Get ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
+        self.set_list_ssmparameters(['ASS_AWS_NOTIFICATION_MODE'])
+        # Get variables depending on the ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
         if os.environ['NOTIFICATION_MODE'] == "NONE":
-            self.logger.warning("NOTIFICATION_MODE is set to NONE!!!")
-            os.environ["NOTIFICATION_MODE"] = "NONE"
             self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
         elif os.environ['NOTIFICATION_MODE'] == "JIRA":
-            checkvars = {"JIRA_USER", "JIRA_API_PASSWORD", "JIRA_URL"}
-            for jiraenv in checkvars:
-                if jiraenv not in os.environ:
-                    warning = "One of the Jira variables JIRA_USER, JIRA_API_PASSWORD " \
-                              "& JIRA_URL is not setup correctly!!!"
-                    self.logger.warning(warning)
-                    raise Exception(warning)
+            self.logger.info('Getting Jira variables from Parameter store')
+            self.set_list_ssmparameters(['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL'])
             self.logger.info('Jira variables available')
         elif os.environ['NOTIFICATION_MODE'] == "GOOGLECHAT":
-            if 'CHATURL' not in os.environ:
-                warning = "Google char url variable CHATURL is not setup correctly!!!"
-                self.logger.warning(warning)
-                raise Exception(warning)
+            self.logger.info('Getting Google Chat variable from Parameter store')
+            self.set_list_ssmparameters(['ASS_AWS_CHATURL'])
             self.logger.info(f'Google chat variable available.')
         else:
             warning = "NOTIFICATION_MODE is unknown!!!"
             self.logger.warning(warning)
             raise Exception(warning)
+
+        self.logger.info(f"Parameters set from SSM Parameter store")
+
+    def set_list_ssmparameters(self, paramter_list: list):
+        ssm_client = boto3.client('ssm', region_name=self.get_region())
+        try:
+            response = ssm_client.get_parameters(
+                Names=paramter_list, WithDecryption=True)
+
+            for parameters in response['Parameters']:
+                key = parameters['Name']
+                value = parameters['Value']
+                os.environ[key[8:]] = value
+        except Exception as e:
+            self.logger.error(f"Error occurred while getting the objects from the SSM ParameterStore")
+            raise
 
 
     def set_logger(self, logger):
