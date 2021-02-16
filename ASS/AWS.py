@@ -43,7 +43,7 @@ class AWS:
             for parameters in response['Parameters']:
                 key = parameters['Name']
                 value = parameters['Value']
-                os.environ[key[8:]] = value
+                os.environ[str(key[8:])] = str(value)
         except Exception as e:
             self.logger.error(f"Error occurred while getting the objects from the SSM ParameterStore")
             raise

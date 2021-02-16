@@ -6,25 +6,17 @@ from json import dumps
 
 class Notification:
 
-    # Default value is the 1ste Lijn Support Google Chat channel
-    chat_url = os.getenv('CHATURL')
-
-    jira_url = os.getenv('JIRA_URL')
-    jira_user = os.getenv('JIRA_USER')
-    jira_password = os.getenv('JIRA_API_PASSWORD')
-
-    notificationmode = os.getenv('NOTIFICATION_MODE')
-
     @staticmethod
     def post_message_to_google_chat(summary: str, description: str):
         message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+        chat_url = os.getenv('CHATURL')
 
         http_obj = Http()
 
         text = f"{summary} \n{description}"
 
         return http_obj.request(
-            uri=Notification.chat_url,
+            uri=chat_url,
             method='POST',
             headers=message_headers,
             body=dumps({'text': text})
@@ -33,8 +25,12 @@ class Notification:
     @staticmethod
     def create_jira_ticket(summary: str, description: str):
 
-        options = {'server': Notification.jira_url}
-        jira = JIRA(options, basic_auth=(Notification.jira_user,Notification.jira_password))
+        jira_url = os.getenv('JIRA_URL')
+        jira_user = os.getenv('JIRA_USER')
+        jira_password = os.getenv('JIRA_API_PASSWORD')
+
+        options = {'server': jira_url}
+        jira = JIRA(options, basic_auth=(jira_user, jira_password))
 
         issue_dict = {
             'project': {'id': 16937},
@@ -48,7 +44,9 @@ class Notification:
     @staticmethod
     def send_notification(summary: str, description: str = ""):
 
-        if Notification.notificationmode == 'GOOGLECHAT':
+        notificationmode = os.getenv('NOTIFICATION_MODE')
+
+        if notificationmode == 'GOOGLECHAT':
             Notification.post_message_to_google_chat(summary, description)
-        elif Notification.notificationmode == 'JIRA':
+        elif notificationmode == 'JIRA':
             Notification.create_jira_ticket(summary, description)
