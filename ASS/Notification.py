@@ -28,12 +28,13 @@ class Notification:
         jira_url = os.getenv('JIRA_URL')
         jira_user = os.getenv('JIRA_USER')
         jira_password = os.getenv('JIRA_API_PASSWORD')
+        jira_project = os.getenv('JIRA_PROJECT')
 
         options = {'server': jira_url}
         jira = JIRA(options, basic_auth=(jira_user, jira_password))
 
         issue_dict = {
-            'project': {'id': 16937},
+            'project': {'id': jira_project},
             'summary': f'{summary}',
             'description': f'{description}',
             'issuetype': {'name': 'Support'},

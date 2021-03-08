@@ -21,7 +21,7 @@ class AWS:
             self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
         elif os.environ['NOTIFICATION_MODE'].upper() == "JIRA":
             self.logger.info('Getting Jira variables from Parameter store')
-            self.set_list_ssmparameters(['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL'])
+            self.set_list_ssmparameters(['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL', 'ASS_AWS_JIRA_PROJECT'])
             self.logger.info('Jira variables available')
         elif os.environ['NOTIFICATION_MODE'].upper() == "GOOGLECHAT":
             self.logger.info('Getting Google Chat variable from Parameter store')
