@@ -9,8 +9,45 @@ class AWS:
         self.set_logger(logger)
         self._set_account_id()
         self._set_region()
+        self.get_notification_variables()
         self.boto3_client_map = dict()
         pass
+
+    def get_notification_variables(self):
+        # Get ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
+        self.set_list_ssmparameters(['ASS_AWS_NOTIFICATION_MODE'])
+        # Get variables depending on the ASS_AWS_NOTIFICATION_MODE variable from SSM Parameter store.
+        if os.environ['NOTIFICATION_MODE'].upper() == "NONE":
+            self.logger.info(f'NOTIFICATION_MODE variable available. Mode:{os.environ["NOTIFICATION_MODE"]}')
+        elif os.environ['NOTIFICATION_MODE'].upper() == "JIRA":
+            self.logger.info('Getting Jira variables from Parameter store')
+            self.set_list_ssmparameters(['ASS_AWS_JIRA_USER', 'ASS_AWS_JIRA_API_PASSWORD', 'ASS_AWS_JIRA_URL', 'ASS_AWS_JIRA_PROJECT'])
+            self.logger.info('Jira variables available')
+        elif os.environ['NOTIFICATION_MODE'].upper() == "GOOGLECHAT":
+            self.logger.info('Getting Google Chat variable from Parameter store')
+            self.set_list_ssmparameters(['ASS_AWS_CHATURL'])
+            self.logger.info(f'Google chat variable available.')
+        else:
+            warning = "NOTIFICATION_MODE is unknown!!!"
+            self.logger.warning(warning)
+            raise Exception(warning)
+
+        self.logger.info(f"Parameters set from SSM Parameter store")
+
+    def set_list_ssmparameters(self, paramter_list: list):
+        ssm_client = boto3.client('ssm', region_name=self.get_region())
+        try:
+            response = ssm_client.get_parameters(
+                Names=paramter_list, WithDecryption=True)
+
+            for parameters in response['Parameters']:
+                key = parameters['Name']
+                value = parameters['Value']
+                os.environ[str(key[8:])] = str(value)
+        except Exception as e:
+            self.logger.error(f"Error occurred while getting the objects from the SSM ParameterStore")
+            raise
+
 
     def set_logger(self, logger):
         if logger.__module__ and logger.__module__ == 'logging':
@@ -57,15 +94,48 @@ class AWS:
             self.logger.debug(f"No TagSet found or bucket nog found for bucket {bucket_name}")
             return False
 
-    def resource_has_tag(self, client, resource_arn, tag_name, tag_value):
+    def resource_has_tag(self, client, resource_arn, tag_name, tag_value=None):
+        """
+        Checks if the resource with arn resource_arn has a tag tag_name. If tag_value is
+        passed, the function returns True if the tag exists and the value matches, False
+        in all other cases. If tag_value is not passed, the function returns the value of the
+        tag if the tag exists, and False in all other cases.
+        :param client: boto3 client
+        :param resource_arn: arn of the resource to check for the tag
+        :param tag_name: the name of the tag to search for
+        :param tag_value: the value of the tag, if not passed or None, the value of the tag
+                          is returned.
+        :return:
+            True or False if tag_value is passed
+            The value of the tag or False if tag_value is not passed or None
+        """
         self.logger.debug(f"Checking resource {resource_arn} for tag {tag_name} with value {tag_value}")
         try:
-            response = client.list_tags_for_resource(ResourceName=resource_arn)
-            self.logger.debug(response['TagList'])
-            for tag in response['TagList']:
-                if tag['Key'] == tag_name and tag['Value'] == tag_value:
-                    self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag_value}")
-                    return True
+            response = ""
+            # Checking for type of client
+            if "RDS" in str(client.__class__):
+                self.logger.debug(f"RDS Client detected")
+                response = client.list_tags_for_resource(ResourceName=resource_arn)['TagList']
+            elif "CloudFront" in str(client.__class__):
+                self.logger.debug(f"Cloudfront Client detected")
+                response = client.list_tags_for_resource(Resource=resource_arn)['Tags']['Items']
+            else:
+                self.logger.debug(f"Unknown client detected!")
+
+            self.logger.debug(response)
+            for tag in response:
+                if tag['Key'] == tag_name:
+                    if tag_value is not None:
+                        if tag['Value'] == tag_value:
+                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['Value']}")
+                            return True
+                        else:
+                            self.logger.debug(f"Resource {resource_arn} has tag {tag_name} but value {tag['Value']} "
+                                              f"does not match {tag_value}")
+                            return False
+                    else:
+                        self.logger.debug(f"Resource {resource_arn} has tag {tag_name} with value {tag['Value']}")
+                        return tag['Value']
         except Exception:
             return False
 

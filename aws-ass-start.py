@@ -84,15 +84,17 @@ def get_stack_names_and_creation_order(cfg, aws):
 
     except NoRegionError:
         cfg.get_logger().error(f"No AWS Credentials provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-start: No AWS Credentials provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-start:",
+            f"No AWS Credentials provided!!!"
         )
         raise
     except ClientError as e:
         cfg.get_logger().error(e.response['Error']['Code'])
         cfg.get_logger().error(e.response['Error']['Message'])
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-start: {e.response['Error']['Message']}"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-start:",
+            f"{e.response['Error']['Message']}"
         )
         raise
 
@@ -115,8 +117,9 @@ def get_beanstalk_environment_deletion_order_from_state_bucket(cfg, aws, environ
         cfg.get_logger().warning(f"An error occurred retrieving stack information from the S3 state bucket")
         cfg.get_logger().warning(f"Skipping this beanstalk environment, because it's an environment")
         cfg.get_logger().warning(f"that was deleted outside the stop/start setup.")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-start: error retrieving stack information from s3"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-start:",
+            f"error retrieving stack information from s3"
         )
         return None
 
@@ -134,8 +137,9 @@ def get_deleted_beanstalk_environment_names_and_creation_order(cfg, aws):
         env_list = response['Environments']
     except NoRegionError as e:
         cfg.get_logger().error(f"No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-start: No AWS Region provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-start:",
+            f"No AWS Region provided!!!"
         )
         raise e
 
@@ -176,8 +180,8 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                 cfg.get_logger().debug(e)
                 cfg.get_logger().warning("An error occurred retrieving stack information from the S3 state bucket")
                 cfg.get_logger().warning("Continuing without restoring data from S3")
-                Notification.post_message_to_google_chat(
-                    f"Account ID {aws.get_account_id()}: aws-ass-start: "
+                Notification.send_notification(
+                    f"Account ID {aws.get_account_id()} aws-ass-start:",
                     f"An error occurred retrieving stack information from the S3 state bucket"
                 )
                 stack_dict['stack_parameters'] = []
@@ -217,8 +221,8 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                             f"Stack re-creation for {stack['stack_name']} has failed, check the CloudFormation logs."
                         )
                         cfg.get_logger().error(e)
-                        Notification.post_message_to_google_chat(
-                            f"Account ID {aws.get_account_id()}: aws-ass-start: "
+                        Notification.send_notification(
+                            f"Account ID {aws.get_account_id()} aws-ass-start:",
                             f"Stack re-creation for {stack['stack_name']} has failed, check the CloudFormation logs."
                         )
                         raise
@@ -233,8 +237,8 @@ def get_stack_template_and_create_template(cfg, aws, stack):
                         except Exception:
                             cfg.get_logger().error("An error occurred while deleting stack {stack['stack_name']}")
                             cfg.get_logger().error("No use to retry when stack already exists (in a failed state).")
-                            Notification.post_message_to_google_chat(
-                                f"Account ID {aws.get_account_id()}: aws-ass-start: "
+                            Notification.send_notification(
+                                f"Account ID {aws.get_account_id()} aws-ass-start:",
                                 f"An error occurred while deleting stack {stack['stack_name']}."
                             )
                             raise
@@ -318,14 +322,16 @@ def start_tagged_rds_clusters_and_instances(cfg, aws):
 
         except NoRegionError:
             cfg.get_logger().error("No region provided!!!")
-            Notification.post_message_to_google_chat(
-                f"Account ID {aws.get_account_id()}: aws-ass-start: No region provided."
+            Notification.send_notification(
+                f"Account ID {aws.get_account_id()} aws-ass-start:",
+                f"No region provided."
             )
             raise
         except NoCredentialsError:
             cfg.get_logger().error("No credentials provided!!!")
-            Notification.post_message_to_google_chat(
-                f"Account ID {aws.get_account_id()}: aws-ass-start: No credentials provided."
+            Notification.send_notification(
+                f"Account ID {aws.get_account_id()} aws-ass-start:",
+                f"No credentials provided."
             )
             raise
 
@@ -384,9 +390,9 @@ def create_deleted_tagged_beanstalk_environments(cfg, aws):
         except Exception:
             cfg.get_logger().error(f"Async re-creation of terminated BeanStalk environment "
                                    f"{environment['environment_name']} failed")
-            Notification.post_message_to_google_chat(
-                f"Account ID {aws.get_account_id()}: aws-ass-start: "
-                f"Async re-creation of terminated BeanStalk environment "
+            Notification.send_notification(
+                f"Account ID {aws.get_account_id()} aws-ass-start:",
+                f"Async re-creation of terminated BeanStalk environment \n"
                 f"{environment['environment_name']} failed")
             raise
 
@@ -412,14 +418,16 @@ def restore_s3_backup(cfg, aws):
                 aws.restore_bucket(bucket_name, cfg.get_backup_bucket_name(aws.get_region(), aws.get_account_id()))
     except NoRegionError:
         cfg.get_logger().error("No region provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No region provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No region provided!!!"
         )
         raise
     except NoCredentialsError:
         cfg.get_logger().error("No credentials provided!!!")
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-stop: No credentials provided!!!"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-stop:",
+            f"No credentials provided!!!"
         )
         raise
     except Exception:
@@ -444,8 +452,9 @@ def main():
     except Exception as e:
         cfg.get_logger().error("An exception occurred")
         cfg.get_logger().error(e)
-        Notification.post_message_to_google_chat(
-            f"Account ID {aws.get_account_id()}: aws-ass-start: An exception occured"
+        Notification.send_notification(
+            f"Account ID {aws.get_account_id()} aws-ass-start:",
+            f"An exception occured"
         )
     finally:
         if cfg.get_template_bucket_name():
