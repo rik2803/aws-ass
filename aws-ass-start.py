@@ -117,10 +117,6 @@ def get_beanstalk_environment_deletion_order_from_state_bucket(cfg, aws, environ
         cfg.get_logger().warning(f"An error occurred retrieving stack information from the S3 state bucket")
         cfg.get_logger().warning(f"Skipping this beanstalk environment, because it's an environment")
         cfg.get_logger().warning(f"that was deleted outside the stop/start setup.")
-        Notification.send_notification(
-            f"Account ID {aws.get_account_id()} aws-ass-start:",
-            f"error retrieving stack information from s3"
-        )
         return None
 
 
