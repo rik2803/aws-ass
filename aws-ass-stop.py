@@ -1,3 +1,5 @@
+import time
+
 import boto3
 import logging
 import json
@@ -245,6 +247,9 @@ def empty_lb_access_log_buckets(cfg, aws):
         bucket = get_lb_access_log_bucket(cfg, lb_client, lb['LoadBalancerArn'], aws)
         disable_lb_access_logs(cfg, lb_client, lb['LoadBalancerArn'], aws)
         if bucket != '':
+            cfg.get_logger().info("Disabled LB logs, waiting 30 seconds before emptying the bucket.")
+            time.sleep(30)
+            cfg.get_logger().info("Nice powernap, ready to empty bucket now.")
             empty_bucket(cfg, bucket, aws)
 
 
