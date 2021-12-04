@@ -188,7 +188,9 @@ These tags can be prefixed as described above.
   (if tag does not exist, `default to private`)
   
 
-## Skipping actions by setting environment variables
+## Environment variables
+
+### Skipping actions by setting environment variables
 
 Setting any of the following environment variables to `1` will cause the scripts to skip
 all actions related to that variable.
@@ -198,20 +200,7 @@ all actions related to that variable.
 * `ASS_SKIP_ELASTICBEANSTALK`
 * `ASS_SKIP_RDS`
 
-### Configure a scheduled task in a  Fargat ECS Cluster to regularly update the dashboard
+### Other environment variables
 
-* It is currently not possible to do this with _CloudFormation_, because the `AWS::Events::Rule`
-  object does not (yet, hopefully) support the extended `EcsParameters` as described in
-  [the
-  API documentation](https://docs.aws.amazon.com/AmazonCloudWatchEvents/latest/APIReference/API_PutTargets.html#API_PutTargets_RequestSyntax).
-* To do this in the console (the _Fargate_ cluster and the _Task Definition
-  already exist):
-    * Go to *CloudWatch* -> *Events* -> *Rules*
-    * Create a _Rule_ with a _Schedule_ (i.e. `rate(15 minutes)`)
-    * Add a target
-      * Choose _ECS Task_ as the target type
-      * Select the cluster
-      * Select the Task Definition
-      * Set _Launch Type_ to `FARGATE`
-      * Configure the Network Configuration (subnets and SG)
-      * Auto-assign public IP address can remain `DISABLED`
+* `SLEEP_SECONDS_AFTER_RDS_START`: When starting, the script wil sleep `SLEEP_SECONDS_AFTER_RDS_START` seconds after
+  initiating the RDS start.
