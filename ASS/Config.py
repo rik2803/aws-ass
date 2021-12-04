@@ -11,6 +11,7 @@ class Config:
         self._init_logger(project_name)
         self.aws_authenticated = False
         self.template_bucket_name = None
+        self.get_sleep_seconds_after_rds_start()
 
     def get_logger(self):
         return self.logger
@@ -37,6 +38,9 @@ class Config:
 
     def full_ass_tag(self, tag):
         return f"{self.get_ass_tag_prefix()}{tag}"
+
+    def get_sleep_seconds_after_rds_start(self):
+        self.sleep_seconds_after_rds_start = os.getenv('SLEEP_SECONDS_AFTER_RDS_START', '0')
 
     def _set_ass_tag_prefix(self):
         if 'ASS_TAG_PREFIX' in os.environ:
