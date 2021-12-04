@@ -337,11 +337,9 @@ def start_tagged_rds_clusters_and_instances(cfg, aws):
     start_rds('instance', 'DBInstances', 'DBInstanceIdentifier', 'DBInstanceArn', 'DBInstanceStatus')
     start_rds('cluster', 'DBClusters', 'DBClusterIdentifier', 'DBClusterArn', 'Status')
     cfg.get_logger().info("Finished starting RDS clusters and instances tagged with ass:rds:include=yes")
-    cfg.get_logger().info(f"Start sleeping ${cfg.sleep_seconds_after_rds_start} ",
-                          "seconds after starting RDS clusters and instances")
-    time.sleep(cfg.sleep_seconds_after_rds_start)
-    cfg.get_logger().info(f"Done sleeping ${cfg.sleep_seconds_after_rds_start} ",
-                          "seconds after starting RDS clusters and instances")
+    cfg.get_logger().info(f"Start sleeping {cfg.sleep_seconds_after_rds_start} seconds after starting RDS clusters and instances")
+    time.sleep(int(cfg.sleep_seconds_after_rds_start))
+    cfg.get_logger().info(f"Done sleeping {cfg.sleep_seconds_after_rds_start} seconds after starting RDS clusters and instances")
 
 
 def resource_has_tag(client, resource_arn, tag_name, tag_value):

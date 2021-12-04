@@ -2,7 +2,17 @@
 
 [toc]
 
-## Build and publish the images
+## Build and publish the images on a MAC with Apple Silicon
+
+The commands are run from the root of this repository.
+
+```
+docker login
+docker buildx build --platform linux/amd64 -f ./Dockerfile-stop -t tryxcom/aws-ass-stop .
+docker buildx build --platform linux/amd64 --push -f ./Dockerfile-start -t tryxcom/aws-ass-start .
+```
+
+## Build and publish the images 
 
 The commands are run from the root of this repository.
 
